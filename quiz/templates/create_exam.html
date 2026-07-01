@@ -1,0 +1,225 @@
+{% extends 'home.html' %}
+
+{% block content %}
+<div class="container mx-auto mt-10">
+    <div class="max-w-lg mx-auto bg-white p-8 rounded shadow">
+        <h1 class="text-2xl font-bold mb-4">Create Exam</h1>
+        <form id="create-exam-form">
+            <!-- Exam creation fields -->
+            <div class="mb-4">
+                <label for="title" class="block text-gray-700">Title:</label>
+                <input type="text" id="title" name="title" class="w-full p-2 border border-gray-300 rounded" required>
+            </div>
+            <div class="mb-4">
+                <label for="total_questions" class="block text-gray-700">Total Questions:</label>
+                <input type="number" id="total_questions" name="total_questions" class="w-full p-2 border border-gray-300 rounded" required>
+            </div>
+            <div class="mb-4">
+                <label for="total_marks" class="block text-gray-700">Total Marks:</label>
+                <input type="number" id="total_marks" name="total_marks" class="w-full p-2 border border-gray-300 rounded" required>
+            </div>
+            <div class="mb-4">
+                <label for="last_date" class="block text-gray-700">Last Date:</label>
+                <input type="date" id="last_date" name="last_date" class="w-full p-2 border border-gray-300 rounded">
+            </div>
+            <button type="button" id="create-exam-btn" class="w-full bg-blue-500 text-white p-2 rounded">Create Exam</button>
+        </form>
+
+        <div id='exel-form' class="my-4 hidden">
+            <h2 class="text-2xl font-bold mb-4 text-red-400">Upload Question with Option File</h2>
+            <input type="file" id="upload-excel" accept=".xlsx,.xls" class="w-full p-2 border border-gray-300 rounded mb-4">
+            <button type="button" id="upload-excel-btn" class="w-full bg-blue-500 text-white p-2 rounded">Upload Excel</button>
+        </div>
+
+        <div id="questions-section" class="hidden">
+            <h1 class="text-2xl font-bold mb-4 mt-8">Add Questions</h1>
+            <div id="questions-container">
+                <!-- Initial question form, cloned dynamically -->
+                <div class="question-item mb-4 hidden">
+                    <form class="create-question-form">
+                        <div class="mb-4">
+                            <label for="text" class="block text-gray-700">Question Text:</label>
+                            <input type="text" name="text" class="w-full p-2 border border-gray-300 rounded" required>
+                        </div>
+                        <div class="mb-4">
+                            <label for="marks" class="block text-gray-700">Marks:</label>
+                            <input type="number" name="marks" class="w-full p-2 border border-gray-300 rounded" required>
+                        </div>
+                        <div class="mb-4">
+                            <label for="category" class="block text-gray-700">Category:</label>
+                            <select name="category" class="w-full p-2 border border-gray-300 rounded" required>
+                                <option value="">Select Category</option>
+                                {% for category in categories %}
+                                    <option value="{{ category.id }}">{{ category.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="options-container">
+                            <h2 class="text-lg font-semibold mb-2">Options</h2>
+                            <div class="option-item mb-2">
+                                <label for="option_text" class="block text-gray-700">Option Text:</label>
+                                <input type="text" name="option_text" class="w-full p-2 border border-gray-300 rounded" required>
+                                <label for="is_correct" class="block text-gray-700">Is Correct:</label>
+                                <input type="checkbox" name="is_correct" class="mr-2 leading-tight">
+                            </div>
+                        </div>
+                        <button type="button" class="add-option-btn bg-green-500 text-white p-2 rounded mt-2">Add Option</button>
+                    </form>
+                </div>
+            </div>
+            <button id="add-question-btn" class="w-full bg-green-500 text-white p-2 rounded mt-4">Add Question</button>
+            <button id="submit-all-btn" class="w-full bg-blue-500 text-white p-2 rounded mt-4">Submit All</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const accessToken = localStorage.getItem('access_token');
+        if (!accessToken) {
+            window.location.href = '/login/';
+            return;
+        }
+
+        const questionsSection = document.getElementById('questions-section');
+        const createExamBtn = document.getElementById('create-exam-btn');
+        const uploadExcelBtn = document.getElementById('upload-excel-btn');
+        const fileInput = document.getElementById('upload-excel');
+        const exelForm = document.getElementById('exel-form');
+
+        createExamBtn.addEventListener('click', async function() {
+            const form = document.getElementById('create-exam-form');
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData);
+
+            try {
+                const response = await fetch('/quiz/exams/', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + accessToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data),
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    form.dataset.examId = result.exam_id;
+                    //questionsSection.classList.remove('hidden');
+                    exelForm.classList.remove('hidden');
+
+                    alert('Exam created successfully!');
+                } else {
+                    alert('Failed to create exam.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        });
+
+        uploadExcelBtn.addEventListener('click', async function() {
+            const file = fileInput.files[0];
+            const examId = document.getElementById('create-exam-form').dataset.examId;
+
+            if (!file || !examId) {
+                alert('Please select an Excel file and create an exam first.');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('exam_id', examId);
+
+            try {
+                const response = await fetch('/quiz/upload-excel/', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + accessToken
+                    },
+                    body: formData,
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    questionsSection.classList.add('hidden');
+                    alert('Excel file processed successfully!');
+                    window.location.href = '/quiz/user_exams/';
+                } else {
+                    console.error('Error processing Excel file:', result);
+                    alert('Failed to process Excel file.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while uploading the Excel file.');
+            }
+        });
+
+        // Adding a new question form dynamically
+        document.getElementById('add-question-btn').addEventListener('click', function() {
+            const questionsContainer = document.getElementById('questions-container');
+            const questionItem = document.querySelector('.question-item.hidden').cloneNode(true);
+
+            questionItem.classList.remove('hidden');
+            questionsContainer.appendChild(questionItem);
+        });
+
+        // Adding a new option dynamically
+        document.addEventListener('click', function(event) {
+            if (event.target.classList.contains('add-option-btn')) {
+                const optionsContainer = event.target.previousElementSibling;
+
+                // Clone the first option item and clear its values
+                const newOptionItem = optionsContainer.querySelector('.option-item').cloneNode(true);
+                newOptionItem.querySelector('input[name="option_text"]').value = '';
+                newOptionItem.querySelector('input[name="is_correct"]').checked = false;
+
+                optionsContainer.appendChild(newOptionItem);
+            }
+        });
+
+        // Submitting all questions
+        document.getElementById('submit-all-btn').addEventListener('click', async function() {
+            const examId = document.getElementById('create-exam-form').dataset.examId;
+            const questionForms = document.querySelectorAll('.create-question-form');
+
+            for (let form of questionForms) {
+                const formData = new FormData(form);
+                formData.append('exam', examId);
+
+                const options = [];
+                form.querySelectorAll('.option-item').forEach(option => {
+                    options.push({
+                        text: option.querySelector('input[name="option_text"]').value,
+                        is_correct: option.querySelector('input[name="is_correct"]').checked,
+                    });
+                });
+
+                const data = Object.fromEntries(formData);
+                data.options = options;
+
+                try {
+                    const response = await fetch('/quiz/questions/', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + accessToken,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data),
+                    });
+
+                    const result = await response.json();
+                    if (!response.ok) {
+                        console.error('Error creating question:', result);
+                        alert('Failed to create question.');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('An error occurred while creating the question.');
+                }
+            }
+
+            alert('All questions submitted successfully!');
+        });
+    });
+</script>
+{% endblock %}

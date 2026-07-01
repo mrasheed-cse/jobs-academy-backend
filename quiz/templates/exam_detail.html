@@ -1,0 +1,83 @@
+{% extends 'home.html' %}
+
+{% block title %}
+Exam Details
+{% endblock %}
+
+{% block content %}
+<div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-2xl mx-auto">
+    <h2 id="exam-title" class="text-2xl font-bold mb-6 text-center"></h2>
+    <div id="exam-info" class="mb-4 flex justify-between">
+        <p><strong>Total Questions:</strong> <span id="total-questions"></span></p>
+        <p><strong>Total Marks:</strong> <span id="total-marks"></span></p>
+        <p><strong>Score:</strong> <span id="score"></span></p>
+        <p><strong>Attempted:</strong> <span id="attempt-count"></span></p>
+    </div>
+    <div class="flex flex-col">
+        <button id="start-exam" class="bg-red-500 text-white text-2xl font-bold py-2 px-4 rounded-md hover:bg-red-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 hidden mb-2">Start Exam</button>
+        <button id="leaderboard" class="bg-blue-600 text-white text-2xl font-bold py-2 px-4 rounded-md hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 hidden">Leaderboard</button>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const examId = window.location.pathname.split('/')[3];
+        const startButton = document.getElementById("start-exam");
+        const leaderboardButton = document.getElementById("leaderboard");
+
+        // Fetch user's role
+        fetch('/auth/user-role/', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+            }
+        })
+        .then(response => response.json())
+        .then(roleData => {
+            if (roleData.role === 'student') {
+                // Fetch exam details if user is a student
+                fetch(`/quiz/exams/exam_detail/${examId}/`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    
+                    document.getElementById('exam-title').textContent = data.title;
+                    document.getElementById('total-questions').textContent = data.total_questions;
+                    document.getElementById('total-marks').textContent = data.total_marks;
+                    document.getElementById('score').textContent = data.correct_answers;
+                    document.getElementById('attempt-count').textContent = data.user_attempt_count;
+                    console.log(data);
+                    startButton.classList.remove('hidden'); // Show start button for students
+                })
+                .catch(error => {
+                    console.error('Error fetching exam details:', error);
+                });
+            }
+            leaderboardButton.classList.remove('hidden'); // Always show leaderboard button
+        })
+        .catch(error => {
+            console.error('Error fetching user role:', error);
+        });
+
+        startButton.addEventListener('click', function() {
+            startExam(examId);
+        });
+
+        leaderboardButton.addEventListener('click', function() {
+            leaderBoard(examId);
+        });
+        
+        function startExam(examId) {
+            window.location.href = `/quiz/start_exam/${examId}/`;
+        }
+
+        function leaderBoard(examId){
+            window.location.href = `/quiz/leader_board/${examId}/`;
+        }
+    });
+</script>
+{% endblock %}

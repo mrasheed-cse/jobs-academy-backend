@@ -1,0 +1,181 @@
+{% comment %} <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accept Exam Invitation</title>
+</head>
+<body style="text-align:center;">
+    <h1>Accept Exam Invitation</h1>
+
+    <p>Click the button below to accept your invitation:</p>
+    <button id="acceptButton">Accept Invitation</button>
+
+    <p id="message" style="color: green;"></p>
+
+    <!-- Link to the external JS file -->
+    <script>
+        async function acceptInvitation() {
+            // Check if user is already logged in (this part is commented out, but you can uncomment if necessary)
+            const accessToken = localStorage.getItem('access_token');
+            // if (!accessToken) {
+            //     // Redirect to login page if not logged in
+            //     window.location.href = '/auth/login/?next=' + window.location.pathname;
+            //     return;
+            // }
+    
+            const token = window.location.href.split('/')[5]; // Extract token from URL
+            console.log(token);
+    
+            // Use backticks for template literals
+            const url = `http://localhost:8000/api/accept-invitation/${token}/`; // Corrected the use of backticks here
+    
+            try {
+                // Send request to accept the invitation
+                const acceptResponse = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`,  // Uncomment this if access token is needed
+                    }
+                });
+    
+                const acceptResult = await acceptResponse.json();
+    
+                if (acceptResponse.ok) {
+                    document.getElementById("message").textContent = acceptResult.message;
+                } else {
+                    document.getElementById("message").textContent = acceptResult.error;
+                }
+            } catch (error) {
+                document.getElementById("message").textContent = 'An error occurred. Please try again.';
+            }
+        }
+    
+        // Attach event listener to the button to trigger the invitation acceptance on click
+        document.getElementById("acceptButton").addEventListener("click", acceptInvitation);
+    </script>
+    
+</body>
+</html> {% endcomment %}
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accept Exam Invitation</title>
+</head>
+<body style="text-align:center;">
+    <h1>Accept Exam Invitation</h1>
+
+    <!-- Login form, hidden initially if the user is logged in -->
+    <div id="loginForm" style="display:none;">
+        <p>Please log in to accept the invitation:</p>
+        <input type="text" id="phone_number" placeholder="Enter your phone number" required><br><br>
+        <input type="password" id="password" placeholder="Enter your password" required><br><br>
+        <button id="loginButton">Log In</button>
+    </div>
+
+    <!-- Message area for errors/success messages -->
+    <p id="message" style="color: green;">Loading...</p>
+
+    <!-- Accept button, hidden until the user logs in -->
+    <div id="acceptSection" style="display:none;">
+        <button id="acceptButton">Accept Invitation</button>
+    </div>
+
+    <script>
+        async function checkLoginStatus() {
+            // Check if the user is logged in by checking for the access token
+            const accessToken = localStorage.getItem('access_token');
+            if (accessToken) {
+                // If logged in, show the accept button
+                document.getElementById("loginForm").style.display = 'none';
+                document.getElementById("acceptSection").style.display = 'block';
+            } else {
+                // Show login form if not logged in
+                document.getElementById("loginForm").style.display = 'block';
+                document.getElementById("acceptSection").style.display = 'none';
+            }
+        }
+
+        async function login() {
+            const phone_number = document.getElementById("phone_number").value;
+            const password = document.getElementById("password").value;
+
+            try {
+                // Make a request to the login API
+                const loginResponse = await fetch('/auth/login/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        phone_number: phone_number,
+                        password: password
+                    })
+                });
+
+                const loginResult = await loginResponse.json();
+
+                if (loginResponse.ok) {
+                    // Store the access token
+                    localStorage.setItem('access_token', loginResult.access);
+                    // Hide login form and show accept button
+                    document.getElementById("loginForm").style.display = 'none';
+                    document.getElementById("acceptSection").style.display = 'block';
+                    document.getElementById("message").textContent = "Login successful! Now you can accept the invitation.";
+                } else {
+                    // Show error message if login fails
+                    document.getElementById("message").textContent = loginResult.error || 'Invalid phone number or password.';
+                }
+            } catch (error) {
+                document.getElementById("message").textContent = 'An error occurred during login. Please try again.';
+            }
+        }
+
+        async function acceptInvitation() {
+            const token = window.location.href.split('/')[5]; // Extract token from URL
+            const accessToken = localStorage.getItem('access_token');
+
+            if (!accessToken) {
+                document.getElementById("message").textContent = 'You must be logged in to accept the invitation.';
+                return;
+            }
+
+            try {
+                // Send request to accept the invitation
+                const acceptResponse = await fetch(`/api/accept-invitation/${token}/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+
+                const acceptResult = await acceptResponse.json();
+
+                if (acceptResponse.ok) {
+                    document.getElementById("message").textContent = acceptResult.message;
+                } else {
+                    document.getElementById("message").textContent = acceptResult.error || 'Failed to accept the invitation.';
+                }
+            } catch (error) {
+                document.getElementById("message").textContent = 'An error occurred. Please try again.';
+            }
+        }
+
+        // Check login status when the page loads
+        window.onload = checkLoginStatus;
+
+        // Attach event listener to login button
+        document.getElementById("loginButton").addEventListener("click", login);
+
+        // Attach event listener to accept button
+        document.getElementById("acceptButton").addEventListener("click", acceptInvitation);
+    </script>
+</body>
+</html>

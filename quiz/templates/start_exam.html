@@ -1,0 +1,168 @@
+{% extends 'home.html' %}
+
+{% block title %}
+Start Exam
+{% endblock %}
+
+{% block content %}
+<div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-2xl mx-auto">
+    <h2 class="text-2xl font-bold mb-6 text-center">Start Exam</h2>
+    <div id="exam-info" class="mb-4">
+        <!-- Exam details will be populated here by JavaScript -->
+    </div>
+    <div id="question-container" class="mb-4">
+        <p id="question-text" class="text-lg font-medium mb-2"></p>
+        <form id="answer-form">
+            <div id="options-container" class="mb-4">
+                <!-- Options will be populated here by JavaScript -->
+            </div>
+            <div class="flex justify-between">
+                <button type="button" id="prev-question" class="bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">Previous</button>
+                <button type="button" id="next-question" class="bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">Next</button>
+                <button type="button" id="submit-exam" class="hidden bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">Submit</button>
+            </div>
+        </form>
+    </div>
+    <div id="result-container" class="hidden mb-4">
+        <p id="result-text" class="text-lg font-medium mb-2"></p>
+        <a href="{% url 'exam-list' %}" class="text-indigo-600 hover:text-indigo-500">Go back to exam list</a>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const examId = window.location.pathname.split('/')[3];
+        let currentQuestionIndex = 0;
+        let questions = [];
+        let answers = [];
+
+        function fetchExamDetails() {
+            fetch(`/quiz/exams/${examId}/start/`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                
+                document.getElementById('exam-info').innerHTML = `<h3 class="text-xl font-bold">${data.title}</h3><p>Total Questions: ${data.total_questions}</p>`;
+                fetchQuestions();
+            })
+            .catch(error => {
+                console.error('Error fetching exam details:', error);
+            });
+        }
+
+        function fetchQuestions() {
+            fetch(`/quiz/exams/${examId}/questions/`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                questions = data;
+                
+                if (questions.length > 0) {
+                    showQuestion(0);
+                } else {
+                    console.error('No questions available.');
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching questions:', error);
+            });
+        }
+
+        function submitExam() {
+            fetch(`/quiz/exams/${examId}/submit/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                },
+                body: JSON.stringify({ answers: answers })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('result-container').classList.remove('hidden');
+                document.getElementById('question-container').classList.add('hidden');
+                document.getElementById('result-text').textContent = `Correct Answers: ${data.correct_answers}, Wrong Answers: ${data.wrong_answers}`;
+            })
+            .catch(error => {
+                console.error('Error submitting exam:', error);
+            });
+        }
+
+        document.getElementById('next-question').addEventListener('click', function() {
+            if (saveAnswer()) {
+                if (currentQuestionIndex < questions.length - 1) {
+                    currentQuestionIndex++;
+                    showQuestion(currentQuestionIndex);
+                } else {
+                    document.getElementById('next-question').classList.add('hidden');
+                    document.getElementById('submit-exam').classList.remove('hidden');
+                }
+            } else {
+                alert("Please select an option before proceeding to the next question.");
+            }
+        });
+
+        document.getElementById('prev-question').addEventListener('click', function() {
+            saveAnswer();
+            if (currentQuestionIndex > 0) {
+                currentQuestionIndex--;
+                showQuestion(currentQuestionIndex);
+            }
+        });
+
+        document.getElementById('submit-exam').addEventListener('click', function() {
+            if (saveAnswer()) {
+                submitExam();
+            } else {
+                alert("<h1>Please select an option before submitting the exam.</h1>");
+            }
+        });
+
+        function saveAnswer() {
+            const selectedOption = document.querySelector('input[name="option"]:checked');
+            if (selectedOption) {
+                answers[currentQuestionIndex] = {
+                    question_id: questions[currentQuestionIndex].id,
+                    option: selectedOption.value
+                };
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        function showQuestion(index) {
+            const question = questions[index];
+            document.getElementById('question-text').textContent = question.text;
+            const optionsContainer = document.getElementById('options-container');
+            optionsContainer.innerHTML = '';
+            console.log();
+            question.options.forEach(option => {
+                const optionElement = document.createElement('div');
+                optionElement.classList.add('mb-2');
+                optionElement.innerHTML = `
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="option" value="${option.id}" class="form-radio text-indigo-600">
+                        <span class="ml-2">${option.text}</span>
+                    </label>
+                `;
+                optionsContainer.appendChild(optionElement);
+            });
+            document.getElementById('question-container').classList.remove('hidden');
+            document.getElementById('prev-question').style.visibility = index === 0 ? 'hidden' : 'visible';
+            document.getElementById('next-question').style.visibility = index === questions.length - 1 ? 'hidden' : 'visible';
+            document.getElementById('submit-exam').classList.toggle('hidden', index !== questions.length - 1);
+        }
+
+        fetchExamDetails();
+    });
+</script>
+{% endblock %}

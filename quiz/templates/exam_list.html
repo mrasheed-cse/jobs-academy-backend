@@ -1,0 +1,48 @@
+{% extends 'home.html' %}
+
+{% block title %}
+Exams
+{% endblock %}
+
+{% block content %}
+<div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-4xl mx-auto">
+    <h2 class="text-2xl font-bold mb-6 text-center">Available Exams</h2>
+    <div id="exams-list"></div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const accessToken = localStorage.getItem('access_token');
+    console.log(accessToken);
+    if (!accessToken) {
+        window.location.href = '/login/';
+        return;
+    }
+
+    fetch('/quiz/exams/', {
+        headers: {
+            'Authorization': `Bearer ${accessToken}`
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        const examsList = document.getElementById('exams-list');
+        examsList.innerHTML = data.map(exam => `
+            <div class="mb-4 flex justify-between items-center">
+                <h3 class="text-xl font-semibold mb-2">${exam.title}</h3>
+
+                
+                <button class="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700" onclick="viewExamDetail('${exam.exam_id}')">View Details</button>
+            </div>
+        `).join('');
+    })
+    .catch(error => console.error('Error:', error));
+});
+
+
+
+function viewExamDetail(examId) {
+    window.location.href = `/quiz/exam_detail/${examId}/`;
+}
+</script>
+{% endblock %}

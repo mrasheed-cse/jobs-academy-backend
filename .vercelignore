@@ -1,0 +1,52 @@
+# Python bytecode files
+*.pyc
+__pycache__/
+
+# Virtual environment
+venv/
+
+# Git metadata
+.git/
+
+# Static and media files
+frontend/static/
+media/
+
+# Local configuration
+.env
+*.local
+
+# Testing and documentation
+tests/
+docs/
+
+# Build artifacts
+node_modules/
+build/
+dist/
+
+db.sqlite3
+# frontend
+frontend/templates/home.html
+frontend/templates/login.html
+frontend/templates/signup.html
+
+frontend/templates/Html/assets/video/
+
+frontend/templates/Html/wishlist.html
+frontend/templates/Html/widgets.html
+frontend/templates/Html/vector-maps.html
+frontend/templates/Html/toasts.html
+frontend/templates/Html/typography.html
+frontend/templates/Html/under-maintenance.html
+frontend/templates/Html/two-step-verification-basic.html
+frontend/templates/Html/401-error.html
+frontend/templates/Html/404-error.html
+frontend/templates/Html/500-error.html
+frontend/templates/Html/about-us.html
+frontend/templates/Html/accordions_collpase.html
+frontend/templates/Html/add-products.html
+frontend/templates/Html/alerts.html
+frontend/templates/Html/apex-area-chart.html
+frontend/templates/static/images/
+frontend/templates/static/assets/

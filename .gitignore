@@ -1,0 +1,84 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Django migrations (optional – if you don't want to track migrations)
+**/migrations/
+!*/migrations/__init__.py
+
+# Database
+*.sqlite3
+*.db
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Secrets / service account credentials
+credentials.json
+config/serviceAccountKey.json
+
+# Virtual environments
+venv/
+env/
+.venv/
+.envrc
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Coverage
+htmlcov/
+.coverage
+.tox/
+.nox/
+coverage.xml
+
+# Test output
+.junit/
+nosetests.xml
+test_output/
+
+# Static & media (if generated)
+staticfiles/
+media/
+
+# Node (if using Tailwind, etc.)
+node_modules/
+package-lock.json
+yarn.lock
+dist/
+
+# Compiled files
+*.egg-info/
+*.egg
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+
+# Others
+*.bak
+*.swp
+*.swo
+
+# Legacy Django template assets (not needed for Angular deployment)
+frontend/
+static/
