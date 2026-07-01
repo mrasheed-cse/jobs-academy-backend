@@ -238,6 +238,10 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': config('DB_NAME', default='quiz_portal'),
+        'USER': config('DB_USER', default='quiz_user'),
+        'PASSWORD': config('DB_PASSWORD', default='Bridgers@123'),
+        'HOST': config('DB_HOST', default='127.0.0.1'),
+        'PORT': config('DB_PORT', default='5433'),
         
         
         
