@@ -1,4 +1,5 @@
 from rest_framework import viewsets, permissions
+from rest_framework.views import APIView
 from django.utils import timezone
 from .models import *
 from .serializers import *
@@ -333,3 +334,36 @@ class NewsViewSet(viewsets.ModelViewSet):
                 success_count=total_success_count,
                 failure_count=total_failure_count,
             )
+
+
+class NewsImageUploadView(APIView):
+    """POST /api/news/upload-image/
+
+    Accepts a single image file and stores it as an orphaned NewsImage
+    (news FK is null-able temporarily via a helper model, or we just
+    store it in the media folder and return the URL).
+
+    Used by the Quill editor to get a real server URL immediately when
+    an image is inserted, so the saved HTML contains permanent URLs
+    instead of temporary blob: references.
+
+    Requires teacher or admin role (same as news write operations).
+    """
+    permission_classes = [IsAdminUserRole]
+
+    def post(self, request):
+        image_file = request.FILES.get('image')
+        if not image_file:
+            return Response({'detail': 'No image provided'}, status=400)
+
+        # Store temporarily using the default storage backend
+        from django.core.files.storage import default_storage
+        from django.core.files.base import ContentFile
+        import os
+        import uuid
+
+        ext = os.path.splitext(image_file.name)[1].lower() or '.jpg'
+        filename = f'news_images/inline/{uuid.uuid4().hex}{ext}'
+        path = default_storage.save(filename, ContentFile(image_file.read()))
+        url = request.build_absolute_uri(default_storage.url(path))
+        return Response({'url': url}, status=201)

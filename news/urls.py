@@ -8,7 +8,10 @@ router = DefaultRouter()
 router.register(r'news', NewsViewSet, basename='news')
 router.register(r"news-categories", NewsCategoryViewSet, basename="news-category")
 
+from rest_framework.views import APIView
+
 urlpatterns = [
+    path('api/news/upload-image/', NewsImageUploadView.as_view(), name='news-image-upload'),
     path('api/', include(router.urls)),
 ]
 
