@@ -12,6 +12,8 @@ urlpatterns = [
     path("api/words/search/", WordSearchAPIView.as_view(), name="word-search"),
     path("api/language/<int:language_id>/words/upload/", DictionaryExcelUploadAPIView.as_view()),
     path("api/language/<int:language_id>/words/create/", WordCreateAPIView.as_view(), name="word-create"),
+    path("api/illustration/", IllustrationProxyView.as_view(), name="illustration-proxy"),
+    path("api/pixabay/", PixabayProxyView.as_view(), name="pixabay-proxy"),
     
     
 ]

@@ -360,3 +360,112 @@ class WordCreateAPIView(APIView):
 
         return Response(WordSerializer(word).data, status=201)
 
+
+
+class IllustrationProxyView(APIView):
+    """POST /api/illustration/
+    Proxies a request to the Anthropic API to generate an SVG illustration
+    for a dictionary example sentence. Keeps the API key server-side.
+    Requires authentication (any logged-in user can use this).
+    """
+    permission_classes = [AllowAny]  # illustration is a public feature
+
+    def post(self, request):
+        import os, requests as req_lib
+
+        sentence = request.data.get('sentence', '')
+        word = request.data.get('word', '')
+        meaning = request.data.get('meaning', '')
+
+        if not sentence:
+            return Response({'detail': 'sentence is required'}, status=400)
+
+        api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+        if not api_key:
+            return Response({'detail': 'ANTHROPIC_API_KEY not configured'}, status=503)
+
+        prompt = (
+            f'Create a beautiful minimalist animated SVG illustration for this sentence: \"{sentence}\"\n\n'
+            f'Key word: \"{word}\" (meaning: \"{meaning}\")\n\n'
+            'Rules:\n'
+            '- viewBox=\"0 0 400 200\" width=\"400\" height=\"200\"\n'
+            '- Flat editorial design, soft professional color palette (3-4 colors)\n'
+            '- Include smooth looping CSS animation inside a <style> tag\n'
+            '- Clearly represent the sentence meaning through shapes and figures\n'
+            '- No text labels inside the SVG\n'
+            '- Output ONLY the raw SVG code starting with <svg, nothing else'
+        )
+
+        try:
+            resp = req_lib.post(
+                'https://api.anthropic.com/v1/messages',
+                headers={
+                    'x-api-key': api_key,
+                    'anthropic-version': '2023-06-01',
+                    'Content-Type': 'application/json',
+                },
+                json={
+                    'model': 'claude-sonnet-4-6',
+                    'max_tokens': 1500,
+                    'messages': [{'role': 'user', 'content': prompt}],
+                },
+                timeout=30,
+            )
+            data = resp.json()
+            text = data.get('content', [{}])[0].get('text', '')
+            import re
+            match = re.search(r'<svg[\s\S]*?</svg>', text, re.IGNORECASE)
+            if match:
+                return Response({'svg': match.group(0)})
+            return Response({'detail': 'No SVG in response', 'raw': text[:200]}, status=502)
+        except Exception as e:
+            return Response({'detail': str(e)}, status=502)
+
+
+class PixabayProxyView(APIView):
+    """GET /api/pixabay/?q=search+terms&page=1
+    
+    Proxies Pixabay image search. Keeps the API key server-side.
+    Pixabay is completely free — sign up at pixabay.com/api/docs/
+    Add PIXABAY_API_KEY to your .env file.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        import os
+        import requests as req_lib
+
+        api_key = os.environ.get('PIXABAY_API_KEY', '')
+        if not api_key:
+            return Response({'detail': 'PIXABAY_API_KEY not configured', 'hits': []}, status=200)
+
+        q = request.GET.get('q', '')
+        page = request.GET.get('page', '1')
+
+        if not q:
+            return Response({'hits': []})
+
+        try:
+            resp = req_lib.get(
+                'https://pixabay.com/api/',
+                params={
+                    'key': api_key,
+                    'q': q,
+                    'image_type': 'photo',
+                    'orientation': 'horizontal',
+                    'safesearch': 'true',
+                    'per_page': 10,
+                    'page': page,
+                    'lang': 'en',
+                },
+                timeout=10,
+            )
+            data = resp.json()
+            # Only return the fields we need (don't expose full response)
+            hits = [
+                {'webformatURL': h['webformatURL'], 'tags': h.get('tags', '')}
+                for h in data.get('hits', [])
+            ]
+            return Response({'hits': hits})
+        except Exception as e:
+            return Response({'hits': [], 'detail': str(e)})
