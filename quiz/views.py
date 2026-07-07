@@ -2634,10 +2634,28 @@ class PastExamViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"])
     def questions(self, request, pk=None):
-        """Retrieve questions for a specific past exam."""
+        """Retrieve questions for a specific past exam with full options."""
         past_exam = get_object_or_404(PastExam, pk=pk)
-        questions = past_exam.questions.all()
-        return Response({"questions": [q.text for q in questions]})
+        peqs = PastExamQuestion.objects.filter(exam=past_exam).select_related('question').order_by('order', 'pk')
+        questions = []
+        for peq in peqs:
+            q = peq.question
+            opts = QuestionOption.objects.filter(question=q)
+            questions.append({
+                'id': q.pk,
+                'text': q.text or '',
+                'image': q.image.url if q.image else None,
+                'marks': peq.points or 1,
+                'options': [{'id': o.pk, 'text': o.text, 'image': None} for o in opts],
+            })
+        return Response({
+            'id': past_exam.pk,
+            'title': past_exam.title,
+            'duration': past_exam.duration or 60,
+            'negative_mark': past_exam.negative_mark,
+            'total_questions': len(questions),
+            'questions': questions,
+        })
 
 
 
