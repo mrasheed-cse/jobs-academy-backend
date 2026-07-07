@@ -14,7 +14,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, Sp
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('nested_admin/', include('nested_admin.urls')),
-    path('', include('frontend.urls')),
+    # path('', include('frontend.urls')),  # removed - Angular handles frontend now
     path("api-auth/", include("rest_framework.urls")),
     path('auth/', include('users.urls')),
     path('accounts/', include('allauth.urls')),
@@ -29,6 +29,7 @@ urlpatterns = [
     path('', include("notifications.urls")),
     
     path('', include("language_center.urls")),
+    path('', include('exam_import.urls')),
 
     # API schema / interactive docs (drf-spectacular) — useful during Angular development
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

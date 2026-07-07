@@ -9,8 +9,6 @@ class ImportJob(models.Model):
         ('done',       'Done'),
         ('failed',     'Failed'),
     ]
-
-    # Exam being populated
     exam_title    = models.TextField()
     org_name      = models.TextField()
     position_name = models.TextField()
@@ -18,22 +16,17 @@ class ImportJob(models.Model):
     subject_name  = models.TextField(default='General Knowledge')
     marks_per_q   = models.IntegerField(default=1)
     negative_mark = models.FloatField(default=0.25)
-
-    # Result
     past_exam     = models.ForeignKey(PastExam, null=True, blank=True,
                                        on_delete=models.SET_NULL,
                                        related_name='import_jobs')
-
-    # Progress
     status           = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     total_pages      = models.IntegerField(default=0)
     processed_pages  = models.IntegerField(default=0)
     questions_found  = models.IntegerField(default=0)
     current_page     = models.TextField(blank=True, default='')
     error_log        = models.TextField(blank=True, default='')
-
-    created_at  = models.DateTimeField(auto_now_add=True)
-    finished_at = models.DateTimeField(null=True, blank=True)
+    created_at       = models.DateTimeField(auto_now_add=True)
+    finished_at      = models.DateTimeField(null=True, blank=True)
 
     @property
     def progress_percent(self):

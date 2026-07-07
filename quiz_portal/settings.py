@@ -86,6 +86,7 @@ INSTALLED_APPS = [
     'news',
     'notifications',
     'language_center',
+    'exam_import',
     
     
 ]
