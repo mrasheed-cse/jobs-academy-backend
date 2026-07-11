@@ -201,3 +201,29 @@ class PastExamDetailView(APIView):
             'is_published':    exam.is_published,
             'questions':       questions,
         })
+
+
+class FixMathNotationView(APIView):
+    """POST /api/exam-import/fix-math/ — fixes common math OCR errors in existing questions"""
+    permission_classes = [IsAdminOrTeacher]
+
+    def post(self, request):
+        import re
+        from quiz.models import Question, QuestionOption
+        fixed_q = fixed_o = 0
+
+        def fix(text):
+            if not text: return text, False
+            orig = text
+            text = re.sub(r'log(\d)\s*\*\s*', r'log\1 ', text)
+            text = re.sub(r'\b2n\s*Cr\b', '²ⁿCᵣ', text)
+            return text, text != orig
+
+        for q in Question.objects.all():
+            t, changed = fix(q.text)
+            if changed: q.text = t; q.save(update_fields=['text']); fixed_q += 1
+        for o in QuestionOption.objects.all():
+            t, changed = fix(o.text)
+            if changed: o.text = t; o.save(update_fields=['text']); fixed_o += 1
+
+        return Response({'questions_fixed': fixed_q, 'options_fixed': fixed_o})
