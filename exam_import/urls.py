@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import StartImportView, ImportStatusView, PastExamListAdminView, PastExamDetailView
+from .views import StartImportView, FixMathNotationView, ImportStatusView, PastExamListAdminView, PastExamDetailView
 
 urlpatterns = [
     path('api/exam-import/start/',              StartImportView.as_view(),       name='exam-import-start'),
