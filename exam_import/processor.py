@@ -87,11 +87,31 @@ def scan_image(img_path: str, api_key: str, model: str) -> list:
 
 RULES:
 1. Extract every question — do not skip any.
-2. Preserve Bengali text exactly as written.
-3. Math: x² → x^2, H₂O → H2O, √x → sqrt(x), π → pi, × → *, ÷ → /
+2. Preserve Bengali text 100% exactly as written.
+3. MATHEMATICAL NOTATION — read with extreme care:
+
+   FRACTIONS — Read mixed numbers carefully:
+   - "1 2/3" (one and two-thirds) → write: 1 2/3
+   - "2 4/7" (two and four-sevenths) → write: 2 4/7
+   - "3 3/8" (three and three-eighths) → write: 3 3/8
+   - "5/6" means five-sixths → write: 5/6
+
+   DEGREE SYMBOL — NEVER drop the ° symbol:
+   - ১৮০° → write: ১৮০°, ২৭০° → write: ২৭০°, 360° → write: 360°
+
+   LOGARITHMS — Read the base carefully:
+   - log₂√2 = log BASE 2 of √2 → write: log₂(√2), NOT "log2 * √2"
+   - The subscript after log is the BASE, not a multiplier
+
+   COMBINATIONS/PERMUTATIONS:
+   - ²ⁿCᵣ = ²ⁿCᵣ₊₂ → write with Unicode superscript/subscript exactly
+
+   OTHER: x² → x², H₂O → H₂O, √x → √x, π → π, × → ×, ÷ → ÷
+
 4. If correct answer is marked (ans.A / circled / ticked / bold) — record it.
 5. Options a/b/c/d or ক/খ/গ/ঘ → always output as A/B/C/D.
 6. For diagrams write [Diagram: description] in question text.
+7. CRITICAL: Every option MUST have text. Never return null or empty string.
 
 Output ONLY this JSON, no explanation, no markdown:
 {"questions":[{"number":1,"text":"question text","options":{"A":"opt a","B":"opt b","C":"opt c","D":"opt d"},"correct_option":"C","subject_hint":"gk"}]}
