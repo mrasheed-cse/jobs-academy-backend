@@ -227,3 +227,156 @@ class FixMathNotationView(APIView):
             if changed: o.text = t; o.save(update_fields=['text']); fixed_o += 1
 
         return Response({'questions_fixed': fixed_q, 'options_fixed': fixed_o})
+
+
+# ── Question Editor Views ──────────────────────────────────────────────────────
+
+class ExamQuestionsAdminView(APIView):
+    """GET /api/exam-import/exams/{exam_id}/manage/
+    Returns all questions for an exam for admin review/editing.
+    Includes full option details, correct answer, status.
+    """
+    permission_classes = [IsAdminOrTeacher]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get(self, request, exam_id):
+        from quiz.models import PastExam, PastExamQuestion, QuestionOption
+        from rest_framework.parsers import JSONParser
+        try:
+            exam = PastExam.objects.get(pk=exam_id)
+        except PastExam.DoesNotExist:
+            return Response({'detail': 'Exam not found'}, status=404)
+
+        peqs = (PastExamQuestion.objects
+                .filter(exam=exam)
+                .select_related('question', 'question__subject')
+                .order_by('order', 'pk'))
+
+        questions = []
+        for peq in peqs:
+            q = peq.question
+            opts = QuestionOption.objects.filter(question=q)
+            questions.append({
+                'peq_id':   peq.pk,
+                'order':    peq.order,
+                'id':       q.pk,
+                'text':     q.text,
+                'image':    request.build_absolute_uri(q.image.url) if q.image else None,
+                'marks':    peq.points,
+                'subject':  q.subject.name if q.subject else '',
+                'status':   q.status,
+                'options': [{
+                    'id':         o.pk,
+                    'text':       o.text,
+                    'image':      request.build_absolute_uri(o.image.url) if o.image else None,
+                    'is_correct': o.is_correct,
+                } for o in opts],
+            })
+
+        return Response({
+            'id':              exam.pk,
+            'title':           exam.title,
+            'is_published':    exam.is_published,
+            'total_questions': exam.total_questions,
+            'questions':       questions,
+        })
+
+
+class QuestionEditView(APIView):
+    """PATCH /api/exam-import/questions/{question_id}/
+    Edit a question's text, image, status.
+    """
+    permission_classes = [IsAdminOrTeacher]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def patch(self, request, question_id):
+        from quiz.models import Question
+        try:
+            q = Question.objects.get(pk=question_id)
+        except Question.DoesNotExist:
+            return Response({'detail': 'Not found'}, status=404)
+
+        if 'text' in request.data:
+            q.text = request.data['text']
+        if 'status' in request.data:
+            q.status = request.data['status']
+        if 'image' in request.FILES:
+            q.image = request.FILES['image']
+        if 'remove_image' in request.data and request.data['remove_image'] == 'true':
+            q.image = None
+
+        q.save()
+        return Response({
+            'id': q.pk, 'text': q.text, 'status': q.status,
+            'image': request.build_absolute_uri(q.image.url) if q.image else None,
+        })
+
+    def delete(self, request, question_id):
+        from quiz.models import Question, PastExamQuestion
+        try:
+            q = Question.objects.get(pk=question_id)
+        except Question.DoesNotExist:
+            return Response({'detail': 'Not found'}, status=404)
+        PastExamQuestion.objects.filter(question=q).delete()
+        q.delete()
+        return Response({'detail': 'Deleted'})
+
+
+class OptionEditView(APIView):
+    """PATCH /api/exam-import/options/{option_id}/
+    Edit an option's text, image, correct status.
+    """
+    permission_classes = [IsAdminOrTeacher]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def patch(self, request, option_id):
+        from quiz.models import QuestionOption
+        try:
+            opt = QuestionOption.objects.get(pk=option_id)
+        except QuestionOption.DoesNotExist:
+            return Response({'detail': 'Not found'}, status=404)
+
+        if 'text' in request.data:
+            opt.text = request.data['text']
+        if 'is_correct' in request.data:
+            val = request.data['is_correct']
+            opt.is_correct = val in ('true', '1', True, 'True')
+            # If marking as correct, unmark all others for this question
+            if opt.is_correct:
+                QuestionOption.objects.filter(
+                    question=opt.question
+                ).exclude(pk=opt.pk).update(is_correct=False)
+        if 'image' in request.FILES:
+            opt.image = request.FILES['image']
+        if 'remove_image' in request.data and request.data['remove_image'] == 'true':
+            opt.image = None
+
+        opt.save()
+        return Response({
+            'id': opt.pk, 'text': opt.text, 'is_correct': opt.is_correct,
+            'image': request.build_absolute_uri(opt.image.url) if opt.image else None,
+        })
+
+
+class ExamPublishView(APIView):
+    """POST /api/exam-import/exams/{exam_id}/publish/
+    Toggle exam published status.
+    """
+    permission_classes = [IsAdminOrTeacher]
+
+    def post(self, request, exam_id):
+        from quiz.models import PastExam
+        try:
+            exam = PastExam.objects.get(pk=exam_id)
+        except PastExam.DoesNotExist:
+            return Response({'detail': 'Not found'}, status=404)
+
+        action = request.data.get('action', 'publish')
+        exam.is_published = (action == 'publish')
+        exam.save(update_fields=['is_published'])
+
+        return Response({
+            'id':           exam.pk,
+            'is_published': exam.is_published,
+            'message':      'প্রকাশিত হয়েছে' if exam.is_published else 'অপ্রকাশিত হয়েছে',
+        })
