@@ -2635,9 +2635,17 @@ class PastExamViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     def questions(self, request, pk=None):
         """Retrieve questions for a specific past exam with full options.
-        Uses prefetch_related to fetch all options in a single query
-        instead of one query per question (N+1 fix).
+        Uses prefetch_related (N+1 fix) + Django cache (5 min TTL).
         """
+        from django.core.cache import cache
+        from django.http import JsonResponse
+        import json
+
+        cache_key = f'past_exam_questions_{pk}'
+        cached = cache.get(cache_key)
+        if cached:
+            return Response(cached)
+
         past_exam = get_object_or_404(PastExam, pk=pk)
         peqs = (
             PastExamQuestion.objects
@@ -2649,7 +2657,7 @@ class PastExamViewSet(viewsets.ModelViewSet):
         questions = []
         for peq in peqs:
             q = peq.question
-            opts = q.options.all()  # uses prefetch cache — no DB query
+            opts = q.options.all()
             questions.append({
                 'id': q.pk,
                 'text': q.text or '',
@@ -2657,14 +2665,16 @@ class PastExamViewSet(viewsets.ModelViewSet):
                 'marks': peq.points or 1,
                 'options': [{'id': o.pk, 'text': o.text, 'image': None} for o in opts],
             })
-        return Response({
+        data = {
             'id': past_exam.pk,
             'title': past_exam.title,
             'duration': past_exam.duration or 60,
             'negative_mark': past_exam.negative_mark,
             'total_questions': len(questions),
             'questions': questions,
-        })
+        }
+        cache.set(cache_key, data, 300)  # cache 5 minutes
+        return Response(data)
 
 
 

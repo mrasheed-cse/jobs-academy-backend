@@ -243,6 +243,11 @@ class ExamQuestionsAdminView(APIView):
     def get(self, request, exam_id):
         from quiz.models import PastExam, PastExamQuestion, QuestionOption
         from rest_framework.parsers import JSONParser
+        from django.core.cache import cache
+        cache_key = f'exam_import_questions_{exam_id}'
+        cached = cache.get(cache_key)
+        if cached:
+            return Response(cached)
         try:
             exam = PastExam.objects.get(pk=exam_id)
         except PastExam.DoesNotExist:
