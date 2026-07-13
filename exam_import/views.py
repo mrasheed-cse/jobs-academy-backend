@@ -168,12 +168,13 @@ class PastExamDetailView(APIView):
         peqs = (PastExamQuestion.objects
                 .filter(exam=exam)
                 .select_related('question', 'question__subject')
+                .prefetch_related('question__options')
                 .order_by('order', 'pk'))
 
         questions = []
         for peq in peqs:
             q = peq.question
-            opts = QuestionOption.objects.filter(question=q)
+            opts = q.options.all()  # uses prefetch cache
             show_correct = request.query_params.get('show_answers') == '1'
             questions.append({
                 'id':           q.pk,
@@ -250,12 +251,13 @@ class ExamQuestionsAdminView(APIView):
         peqs = (PastExamQuestion.objects
                 .filter(exam=exam)
                 .select_related('question', 'question__subject')
+                .prefetch_related('question__options')
                 .order_by('order', 'pk'))
 
         questions = []
         for peq in peqs:
             q = peq.question
-            opts = QuestionOption.objects.filter(question=q)
+            opts = q.options.all()  # uses prefetch cache
             questions.append({
                 'peq_id':   peq.pk,
                 'order':    peq.order,

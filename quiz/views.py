@@ -2634,13 +2634,22 @@ class PastExamViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"])
     def questions(self, request, pk=None):
-        """Retrieve questions for a specific past exam with full options."""
+        """Retrieve questions for a specific past exam with full options.
+        Uses prefetch_related to fetch all options in a single query
+        instead of one query per question (N+1 fix).
+        """
         past_exam = get_object_or_404(PastExam, pk=pk)
-        peqs = PastExamQuestion.objects.filter(exam=past_exam).select_related('question').order_by('order', 'pk')
+        peqs = (
+            PastExamQuestion.objects
+            .filter(exam=past_exam)
+            .select_related('question')
+            .prefetch_related('question__options')
+            .order_by('order', 'pk')
+        )
         questions = []
         for peq in peqs:
             q = peq.question
-            opts = QuestionOption.objects.filter(question=q)
+            opts = q.options.all()  # uses prefetch cache — no DB query
             questions.append({
                 'id': q.pk,
                 'text': q.text or '',
@@ -3317,105 +3326,83 @@ class ExamLeaderboardAPIView(APIView):
 
 
 # class PastExamLeaderboardAPIView(APIView):
-#     permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
-#     def get(self, request, exam_id):
-    
-#         if not exam_id:
-#             return Response({'error': 'exam_id is required'}, status=400)
+    def get(self, request, exam_id):
+        past_exam = get_object_or_404(PastExam, id=exam_id)
+        attempts = (
+            PastExamAttempt.objects
+            .filter(past_exam=past_exam)
+            .select_related('user')
+            .order_by('-score', 'attempt_time')
+        )
 
-#         past_exam = get_object_or_404(PastExam, id=exam_id)
+        # Best attempt per user
+        seen = {}
+        for a in attempts:
+            uid = a.user_id
+            if uid not in seen or a.score > seen[uid].score:
+                seen[uid] = a
 
-#         attempts = PastExamAttempt.objects.filter(past_exam=past_exam).select_related('user')
+        ranked = sorted(seen.values(), key=lambda x: -x.score)
 
-#         user_stats = {}
+        entries = []
+        for i, a in enumerate(ranked[:100]):
+            entries.append({
+                'rank':            i + 1,
+                'username':        a.user.username,
+                'full_name':       a.user.get_full_name() or a.user.username,
+                'score':           a.score,
+                'correct_answers': a.correct_answers,
+                'wrong_answers':   a.wrong_answers,
+                'total_questions': a.total_questions,
+                'attempt_time':    a.attempt_time.strftime('%Y-%m-%d'),
+                'is_current_user': request.user.is_authenticated and a.user_id == request.user.id,
+            })
 
-#         for attempt in attempts:
-#             user_id = attempt.user.id
-#             if user_id not in user_stats:
-#                 user_stats[user_id] = {
-#                     'user': attempt.user,
-#                     'total_score': 0,
-#                     'total_questions': 0,
-#                     'attempts': 0,
-#                 }
+        return Response({
+            'exam_id':       past_exam.id,
+            'exam_title':    past_exam.title,
+            'total_entries': len(seen),
+            'entries':       entries,
+        })
 
-#             user_stats[user_id]['total_score'] += attempt.correct_answers or 0
-#             user_stats[user_id]['total_questions'] += attempt.total_questions or 0
-#             user_stats[user_id]['attempts'] += 1
 
-#         # Sort users by total_score
-#         sorted_users = sorted(user_stats.values(), key=lambda x: x['total_score'], reverse=True)
-
-#         # Top 10 leaderboard
-#         top_10 = []
-#         for stat in sorted_users[:10]:
-#             percentage = (
-#                 round((stat['total_score'] / stat['attempts']), 2)
-#                 if stat['attempts'] else 0.0
-#             )
-
-#             top_10.append({
-#                 'id': stat['user'].id,
-#                 'username': stat['user'].username,
-#                 'points': stat['total_score'],
-#                 'attempts': stat['attempts'],
-#                 'percentage': percentage,
-#                 'profile_image': request.build_absolute_uri(stat['user'].profile_picture.url)
-#                 if hasattr(stat['user'], 'profile_picture') and stat['user'].profile_picture else None,
-#             })
-
-#         # Current user data
-#         me = None
-#         for rank, stat in enumerate(sorted_users):
-#             if stat['user'].id == request.user.id:
-#                 percentage = (
-#                     round((stat['total_score'] / stat['attempts']), 2)
-#                     if stat['attempts'] else 0.0
-#                 )
-
-#                 me = {
-#                     'id': stat['user'].id,
-#                     'username': stat['user'].username,
-#                     'points': stat['total_score'],
-#                     'attempts': stat['attempts'],
-#                     'percentage': percentage,
-#                     'rank': rank + 1,
-#                     'profile_image': request.build_absolute_uri(stat['user'].profile_picture.url)
-#                     if hasattr(stat['user'], 'profile_picture') and stat['user'].profile_picture else None,
-#                 }
-#                 break
-
-#         return Response({
-#             'top_10': top_10,
-#             'me': me,
-#         })
 
 
 class PastExamLeaderboardAPIView(APIView):
+    permission_classes = [AllowAny]
+
     def get(self, request, exam_id):
+        past_exam = get_object_or_404(PastExam, id=exam_id)
         attempts = (
             PastExamAttempt.objects
-            .filter(past_exam__id=exam_id)
-            .order_by('-score')[:10]
+            .filter(past_exam=past_exam)
+            .select_related('user')
+            .order_by('-score', 'attempt_time')
         )
-
-        data = []
-        for index, attempt in enumerate(attempts, start=1):
-            # Calculate best score for this user in this exam
-            best_score = (
-                PastExamAttempt.objects
-                .filter(user=attempt.user, past_exam__id=exam_id)
-                .aggregate(max_score=Max('score'))['max_score']
-            )
-
-            data.append({
-                'username': attempt.user.username,
-                'user_id': attempt.user.id,
-                'position': index,
-                'exam_title': attempt.past_exam.title,
-                'current_score': attempt.score,
-                'best_score': best_score
+        seen = {}
+        for a in attempts:
+            uid = a.user_id
+            if uid not in seen or a.score > seen[uid].score:
+                seen[uid] = a
+        ranked = sorted(seen.values(), key=lambda x: -x.score)
+        entries = []
+        for i, a in enumerate(ranked[:100]):
+            entries.append({
+                'rank':            i + 1,
+                'username':        a.user.username,
+                'full_name':       a.user.get_full_name() or a.user.username,
+                'score':           a.score,
+                'correct_answers': a.correct_answers,
+                'wrong_answers':   a.wrong_answers,
+                'total_questions': a.total_questions,
+                'attempt_time':    a.attempt_time.strftime('%Y-%m-%d'),
+                'is_current_user': request.user.is_authenticated and a.user_id == request.user.id,
             })
-
-        return Response(data, status=status.HTTP_200_OK)
+        return Response({
+            'exam_id':       past_exam.id,
+            'exam_title':    past_exam.title,
+            'total_entries': len(seen),
+            'entries':       entries,
+        })
