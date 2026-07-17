@@ -31,6 +31,18 @@ class Word(models.Model):
         null=True
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(
+        max_length=20,
+        choices=[('pending','Pending Review'),('approved','Approved'),('rejected','Rejected')],
+        default='pending',
+        db_index=True,
+    )
+    word_level = models.CharField(
+        max_length=20,
+        choices=[('beginner','Beginner'),('intermediate','Intermediate'),('advanced','Advanced')],
+        default='intermediate',
+        blank=True,
+    )
 
     class Meta:
         unique_together = ("language", "text", "part_of_speech")
@@ -219,3 +231,31 @@ class WordForm(models.Model):
 
     def __str__(self):
         return f"{self.form} ({self.label})"
+
+
+class WordImportJob(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('done', 'Done'),
+        ('failed', 'Failed'),
+    ]
+    status        = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    total_words   = models.IntegerField(default=0)
+    processed_words = models.IntegerField(default=0)
+    failed_words  = models.IntegerField(default=0)
+    current_word  = models.CharField(max_length=100, blank=True, default='')
+    error_log     = models.TextField(blank=True, default='')
+    skipped_words = models.IntegerField(default=0)
+    skipped_log   = models.TextField(blank=True, default='', help_text='Comma-separated list of skipped duplicate words')
+    created_at    = models.DateTimeField(auto_now_add=True)
+    words         = models.ManyToManyField(Word, blank=True, related_name='import_jobs')
+
+    @property
+    def progress_percent(self):
+        if self.total_words == 0:
+            return 0
+        return round((self.processed_words / self.total_words) * 100)
+
+    def __str__(self):
+        return f'WordImportJob #{self.pk} ({self.status})'

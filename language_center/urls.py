@@ -31,3 +31,18 @@ urlpatterns +=[
     
     
 ]
+from .word_import_views import (
+    WordImportStartView, WordImportStatusView, PendingWordsView,
+    WordApproveView, WordRejectView, WordBulkApproveView, WordEditView
+)
+
+word_import_patterns = [
+    path('api/word-import/start/', WordImportStartView.as_view()),
+    path('api/word-import/<int:job_id>/status/', WordImportStatusView.as_view()),
+    path('api/word-import/pending/', PendingWordsView.as_view()),
+    path('api/word-import/bulk-approve/', WordBulkApproveView.as_view()),
+    path('api/word-import/words/<int:word_id>/', WordEditView.as_view()),
+    path('api/word-import/words/<int:word_id>/approve/', WordApproveView.as_view()),
+    path('api/word-import/words/<int:word_id>/reject/', WordRejectView.as_view()),
+]
+urlpatterns += word_import_patterns
