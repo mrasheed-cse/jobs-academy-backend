@@ -10,7 +10,7 @@ from .models import Word, Sense, BanglaMeaning, Definition, DefinitionTranslatio
 
 
 def generate_word_data(word_text: str, api_key: str) -> dict:
-    """Call Gemini to generate full dictionary entry for a word."""
+    """Call Gemini directly to generate full dictionary entry for a word."""
     prompt = f"""Generate a complete English dictionary entry for the word: "{word_text}"
 
 Return ONLY valid JSON with this exact structure, no markdown, no explanation:
@@ -31,22 +31,29 @@ Return ONLY valid JSON with this exact structure, no markdown, no explanation:
   "word_level": "beginner|intermediate|advanced"
 }}"""
 
-    resp = requests.post(
-        'https://openrouter.ai/api/v1/chat/completions',
-        headers={
-            'Authorization': f'Bearer {api_key}',
-            'Content-Type': 'application/json',
-        },
-        json={
-            'model': 'google/gemini-2.5-flash',
-            'messages': [{'role': 'user', 'content': prompt}],
-            'max_tokens': 1000,
-        },
-        timeout=30
-    )
-    resp.raise_for_status()
+    import time as _time
+    for attempt in range(3):  # retry up to 3 times
+        resp = requests.post(
+            'https://openrouter.ai/api/v1/chat/completions',
+            headers={
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json',
+            },
+            json={
+                'model': 'google/gemma-4-31b-it:free',
+                'messages': [{'role': 'user', 'content': prompt}],
+                'max_tokens': 1000,
+            },
+            timeout=30
+        )
+        if resp.status_code == 429:
+            _time.sleep(15 * (attempt + 1))  # backoff: 15s, 30s, 45s
+            continue
+        resp.raise_for_status()
+        break
+    else:
+        resp.raise_for_status()
     content = resp.json()['choices'][0]['message']['content'].strip()
-    # Strip markdown fences
     content = content.replace('```json', '').replace('```', '').strip()
     return json.loads(content)
 
@@ -192,6 +199,8 @@ def process_word_import(job_id: int, words: list, api_key: str):
             failed += 1
             job.error_log += f'\n{word_text}: {str(e)}'
 
+        import time
+        time.sleep(10)  # 10 second delay for free model rate limits
         job.processed_words = processed
         job.failed_words = failed
         job.save(update_fields=['processed_words', 'failed_words', 'error_log'])
