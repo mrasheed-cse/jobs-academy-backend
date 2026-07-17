@@ -40,7 +40,7 @@ Return ONLY valid JSON with this exact structure, no markdown, no explanation:
                 'Content-Type': 'application/json',
             },
             json={
-                'model': 'google/gemma-4-31b-it:free',
+                'model': 'tencent/hy3:free',
                 'messages': [{'role': 'user', 'content': prompt}],
                 'max_tokens': 1000,
             },
