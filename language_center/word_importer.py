@@ -51,12 +51,21 @@ Return ONLY valid JSON with this exact structure, no markdown, no explanation:
     return json.loads(content)
 
 
+# Cache languages to avoid transaction issues
+_lang_cache = {}
+
+def _get_languages():
+    global _lang_cache
+    if 'en' not in _lang_cache:
+        _lang_cache['en'] = Language.objects.filter(name='English').first()
+    if 'bn' not in _lang_cache:
+        _lang_cache['bn'] = Language.objects.filter(name='Bangla').first() or Language.objects.filter(name='Bengali').first() or Language.objects.filter(code='BN').first()
+    return _lang_cache['en'], _lang_cache['bn']
+
 @transaction.atomic
 def save_word_entry(data: dict, job) -> Word:
     """Save generated word data to database."""
-    # Get or create language
-    lang_en, _ = Language.objects.get_or_create(name='English', defaults={'code': 'EN'})
-    lang_bn, _ = Language.objects.get_or_create(name='Bengali', defaults={'code': 'BN'})
+    lang_en, lang_bn = _get_languages()
 
     # Get or create part of speech
     pos_name = data.get('part_of_speech', 'noun').lower()
@@ -147,11 +156,14 @@ def process_word_import(job_id: int, words: list, api_key: str):
 
     # Check which words already exist in DB
     try:
-        lang_en, _ = Language.objects.get_or_create(name='English', defaults={'code': 'EN'})
-        existing = set(
-            Word.objects.filter(language=lang_en, text__in=unique_words)
-            .values_list('text', flat=True)
-        )
+        lang_en = Language.objects.filter(name='English').first()
+        if lang_en:
+            existing = set(
+                Word.objects.filter(language=lang_en, text__in=unique_words)
+                .values_list('text', flat=True)
+            )
+        else:
+            existing = set()
     except Exception:
         existing = set()
 
