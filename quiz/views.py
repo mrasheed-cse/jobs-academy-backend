@@ -145,7 +145,12 @@ class ModelTestExamView(APIView):
             serializer = ExamListSerializer(exam)
             data = dict(serializer.data)
             exam_questions = ExamQuestion.objects.filter(exam=exam).select_related("question").prefetch_related("question__options").order_by("order")
-            questions_data = []
+            # Build source exam lookup: question_id -> past exam title
+            from quiz.models import PastExamQuestion
+            peq_map = {}
+            for peq in PastExamQuestion.objects.filter(question__in=[eq.question for eq in exam_questions]).select_related("exam"):
+                peq_map[peq.question_id] = peq.exam.title
+
             for eq in exam_questions:
                 q = eq.question
                 questions_data.append({
@@ -155,6 +160,7 @@ class ModelTestExamView(APIView):
                         "text": q.text or "",
                         "image": q.image.url if q.image else None,
                         "options": [{"id": o.pk, "text": o.text, "image": None, "is_correct": o.is_correct} for o in q.options.all()],
+                        "source_exam": peq_map.get(q.pk, ""),
                     },
                     "order": eq.order,
                     "points": eq.points,
