@@ -3558,7 +3558,10 @@ class ModelTestPastExamsView(APIView):
         qs = PastExam.objects.filter(is_published=True).select_related('organization', 'position').order_by('-exam_date')
         if org_id:
             qs = qs.filter(organization_id=org_id)
-        data = [{'id': e.pk, 'title': e.title, 'organization': e.organization.name if e.organization else '',
-                 'position': e.position.name if e.position else '', 'exam_date': str(e.exam_date),
+        data = [{'id': e.pk, 'title': e.title,
+                 'organization': e.organization.name if e.organization else '',
+                 'organization_id': e.organization_id,
+                 'position': e.position.name if e.position else '',
+                 'exam_date': str(e.exam_date) if e.exam_date else '',
                  'total_questions': e.total_questions} for e in qs[:100]]
         return Response({'past_exams': data, 'total': len(data)})
