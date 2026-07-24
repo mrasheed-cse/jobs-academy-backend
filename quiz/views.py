@@ -327,32 +327,15 @@ class ExamViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='questions', permission_classes=[IsAuthenticated])
     def get_questions(self, request, pk=None):
         exam = self.get_object()
-
-        # Fetch the user's usage tracking
-        usage_tracking = UsageTracking.objects.filter(user=request.user).first()
-        if not usage_tracking or not usage_tracking.package:
-            return JsonResponse({"error": "You do not have an active subscription package."}, status=403)
-
-
-        if not usage_tracking.can_take_exam(pk):
-            return JsonResponse({"error": "Exam limit exceeded for this subscription."}, status=403)
-
-        # Check if the user has started the exam
-        # if not usage_tracking.exam_attempts.get(str(exam.exam_id)):
-        #     return JsonResponse({"error": "You have not started this exam yet."}, status=403)
-
-        usage_tracking.increment_exam(pk)
-        # if usage_tracking.total:
-        #     return JsonResponse({"error": "Exam limit exceeded for this subscription."}, status=403)
-        
-        # Fetch and serialize the questions
-        questions = exam.questions.all()
+        from quiz.models import ExamQuestion
+        exam_questions = ExamQuestion.objects.filter(exam=exam).select_related("question").prefetch_related("question__options").order_by("order")
+        questions = [eq.question for eq in exam_questions]
         serializer = QuestionSerializer(questions, many=True)
-
         return Response({
             "questions": serializer.data,
-            "skipped_questions": []  # Initially empty, will hold skipped question IDs as user skips questions
+            "skipped_questions": []
         })
+
 
     
 
@@ -3525,7 +3508,7 @@ class ModelTestCreateView(APIView):
                 negative_mark=negative_mark, created_by=request.user,
                 exam_type=exam_type, organization=organization,
             )
-            Status.objects.create(exam=exam, status='draft', user=request.user)
+            Status.objects.create(exam=exam, status='published', user=request.user)
             for i, peq in enumerate(selected_peqs):
                 q = peq.question
                 eq = ExamQuestion.objects.create(exam=exam, question=q, points=1.0, order=i+1)
@@ -3541,7 +3524,7 @@ class ModelTestCreateView(APIView):
                 negative_mark=negative_mark, created_by=request.user,
                 exam_type=exam_type, organization=organization,
             )
-            Status.objects.create(exam=exam, status='draft', user=request.user)
+            Status.objects.create(exam=exam, status='published', user=request.user)
             for i, q in enumerate(questions):
                 eq = ExamQuestion.objects.create(exam=exam, question=q, points=1.0, order=i+1)
                 for opt in q.options.all()[:4]:
