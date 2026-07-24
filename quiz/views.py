@@ -148,6 +148,7 @@ class ModelTestExamView(APIView):
             # Build source exam lookup: question_id -> past exam title
             from quiz.models import PastExamQuestion
             peq_map = {}
+            questions_data = []
             for peq in PastExamQuestion.objects.filter(question__in=[eq.question for eq in exam_questions]).select_related("exam"):
                 peq_map[peq.question_id] = peq.exam.title
 
