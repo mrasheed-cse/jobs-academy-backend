@@ -183,7 +183,7 @@ from .admin_analytics import *
 
 urlpatterns +=[
     path('daily-performance/', DailyTopScorersAPIView.as_view(), name='daily_performance_api'),
-
-]
     path('model-tests/create/', ModelTestCreateView.as_view(), name='model-test-create'),
     path('model-tests/past-exams/', ModelTestPastExamsView.as_view(), name='model-test-past-exams'),
+
+]
