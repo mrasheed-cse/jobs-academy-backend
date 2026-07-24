@@ -141,20 +141,32 @@ class ModelExamTypeAPIView(APIView):
 class ModelTestExamView(APIView):
     def get(self, request, exam_id=None):
         if exam_id:
-            # Retrieve a single exam by ID
             exam = get_object_or_404(Exam, exam_id=exam_id)
             serializer = ExamListSerializer(exam)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            data = dict(serializer.data)
+            exam_questions = ExamQuestion.objects.filter(exam=exam).select_related("question").prefetch_related("question__options").order_by("order")
+            questions_data = []
+            for eq in exam_questions:
+                q = eq.question
+                questions_data.append({
+                    "id": eq.pk,
+                    "question": {
+                        "id": q.pk,
+                        "text": q.text or "",
+                        "image": q.image.url if q.image else None,
+                        "options": [{"id": o.pk, "text": o.text, "image": None, "is_correct": o.is_correct} for o in q.options.all()],
+                    },
+                    "order": eq.order,
+                    "points": eq.points,
+                })
+            data["questions"] = questions_data
+            return Response(data, status=status.HTTP_200_OK)
         else:
-            # Optional filter by exam_type from query parameter
-            exam_type_id = request.query_params.get('exam_type')
-
-            exams = Exam.objects.filter(exam__status='published')  # Published exams only
-
+            exam_type_id = request.query_params.get("exam_type")
+            exams = Exam.objects.filter(exam__status="published")
             if exam_type_id:
                 exams = exams.filter(exam_type__id=exam_type_id)
-
-            exams = exams.order_by('-created_at')
+            exams = exams.order_by("-created_at")
             serializer = ExamListSerializer(exams, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 

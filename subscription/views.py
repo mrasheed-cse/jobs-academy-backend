@@ -113,6 +113,13 @@ class ExamPermissionCheckView(APIView):
         if not exam:
             return Response({'has_access': False, 'reason': 'exam_not_found'}, status=404)
 
+        # Allow access for admin-created model tests (no subscription needed)
+        if hasattr(exam, "exam_id"):
+            creator = getattr(exam, "created_by", None)
+            if creator and (creator.is_staff or creator.is_superuser or creator == user):
+                return Response({"has_access": True, "reason": "admin_created"})
+
+
         object_id = exam.exam_id if hasattr(exam, 'exam_id') else exam.id
         # Step 2: Validate User Subscription
         subscriptions = UserSubscription.objects.filter(user=user, is_active=True)
