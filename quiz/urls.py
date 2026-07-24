@@ -1,7 +1,9 @@
+from .views import ModelTestCreateView, ModelTestPastExamsView
 from django.urls import path, include
 from django.views.generic import TemplateView
 from rest_framework.routers import DefaultRouter
 from .views import *
+from .views import ModelTestCreateView, ModelTestPastExamsView
 # from .status import SubmitExamToAdminView, SendExamForReviewView, ReviewExamView, ReturnExamToCreatorView, PublishExamView
 from .status import StatusViewSet
 # from .question_status import QuestionStatusViewSet, AssignedQuestionsSummaryAPIView, QuestionsByUserForReviewerView
@@ -183,3 +185,5 @@ urlpatterns +=[
     path('daily-performance/', DailyTopScorersAPIView.as_view(), name='daily_performance_api'),
 
 ]
+    path('model-tests/create/', ModelTestCreateView.as_view(), name='model-test-create'),
+    path('model-tests/past-exams/', ModelTestPastExamsView.as_view(), name='model-test-past-exams'),
