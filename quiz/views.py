@@ -3567,3 +3567,64 @@ class ModelTestPastExamsView(APIView):
                  'exam_date': str(e.exam_date) if e.exam_date else '',
                  'total_questions': e.total_questions} for e in qs[:100]]
         return Response({'past_exams': data, 'total': len(data)})
+
+
+class ModelTestLeaderboardView(APIView):
+    """GET /quiz/exam/{exam_id}/leaderboard/
+    Returns leaderboard for a model test (Exam with UUID).
+    """
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def get(self, request, exam_id):
+        exam = get_object_or_404(Exam, exam_id=exam_id)
+        attempts = (ExamAttempt.objects
+                    .filter(exam=exam)
+                    .select_related('user')
+                    .order_by('-total_correct_answers', 'created_at'))
+
+        # Best attempt per user
+        seen = {}
+        for a in attempts:
+            uid = a.user_id
+            if uid not in seen or a.total_correct_answers > seen[uid].total_correct_answers:
+                seen[uid] = a
+
+        ranked = sorted(seen.values(), key=lambda x: -x.total_correct_answers)
+
+        top_10 = []
+        my_entry = None
+        for i, a in enumerate(ranked[:10]):
+            entry = {
+                'rank': i + 1,
+                'username': a.user.username,
+                'full_name': a.user.get_full_name() or a.user.username,
+                'score': a.total_correct_answers,
+                'wrong': a.wrong_answers,
+                'is_me': a.user_id == request.user.id,
+            }
+            top_10.append(entry)
+            if a.user_id == request.user.id:
+                my_entry = entry
+
+        # Find current user rank if not in top 10
+        if not my_entry:
+            for i, a in enumerate(ranked):
+                if a.user_id == request.user.id:
+                    my_entry = {
+                        'rank': i + 1,
+                        'username': a.user.username,
+                        'full_name': a.user.get_full_name() or a.user.username,
+                        'score': a.total_correct_answers,
+                        'wrong': a.wrong_answers,
+                        'is_me': True,
+                    }
+                    break
+
+        return Response({
+            'exam_id': str(exam.exam_id),
+            'title': exam.title,
+            'total_entries': len(seen),
+            'top_10': top_10,
+            'me': my_entry,
+        })

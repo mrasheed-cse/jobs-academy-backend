@@ -109,7 +109,8 @@ class Exam(models.Model):
                 return "Ongoing"
             
 
-        return "archived"
+        # No dates set = always active (model tests)
+        return "active"
 
     def calculate_pass_fail(self, correct_answers):
         """Determine if the user has passed or failed based on correct answers."""
