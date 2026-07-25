@@ -3337,51 +3337,6 @@ class ExamLeaderboardAPIView(APIView):
 
 
 
-# class PastExamLeaderboardAPIView(APIView):
-    permission_classes = [AllowAny]
-
-    def get(self, request, exam_id):
-        past_exam = get_object_or_404(PastExam, id=exam_id)
-        attempts = (
-            PastExamAttempt.objects
-            .filter(past_exam=past_exam)
-            .select_related('user')
-            .order_by('-score', 'attempt_time')
-        )
-
-        # Best attempt per user
-        seen = {}
-        for a in attempts:
-            uid = a.user_id
-            if uid not in seen or a.score > seen[uid].score:
-                seen[uid] = a
-
-        ranked = sorted(seen.values(), key=lambda x: -x.score)
-
-        entries = []
-        for i, a in enumerate(ranked[:100]):
-            entries.append({
-                'rank':            i + 1,
-                'username':        a.user.username,
-                'full_name':       a.user.get_full_name() or a.user.username,
-                'score':           a.score,
-                'correct_answers': a.correct_answers,
-                'wrong_answers':   a.wrong_answers,
-                'total_questions': a.total_questions,
-                'attempt_time':    a.attempt_time.strftime('%Y-%m-%d'),
-                'is_current_user': request.user.is_authenticated and a.user_id == request.user.id,
-            })
-
-        return Response({
-            'exam_id':       past_exam.id,
-            'exam_title':    past_exam.title,
-            'total_entries': len(seen),
-            'entries':       entries,
-        })
-
-
-
-
 class PastExamLeaderboardAPIView(APIView):
     permission_classes = [AllowAny]
 
