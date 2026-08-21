@@ -73,7 +73,7 @@ class StartImportView(APIView):
         # Sort by original filename so pages are processed in order
         image_paths.sort()
 
-        model = request.data.get('model', 'google/gemini-2.5-flash')
+        model = request.data.get('model', 'tencent/hy3:free')
 
         # Start background thread
         start_background(job.pk, image_paths, api_key, model)

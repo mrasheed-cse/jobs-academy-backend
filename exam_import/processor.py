@@ -75,106 +75,94 @@ def process_job(job_id: int, image_paths: list[str], api_key: str, model: str):
             pass
 
 
-def scan_image(img_path: str, api_key: str, model: str) -> list:
-    ext_map = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-               '.png': 'image/png', '.webp': 'image/webp', '.bmp': 'image/png'}
-    mime = ext_map.get(Path(img_path).suffix.lower(), 'image/jpeg')
-
+def ocr_extract_text(img_path: str, ocr_key: str) -> str:
+    """Step 1: Extract raw text from image using OCR.Space."""
     with open(img_path, 'rb') as f:
-        img_b64 = base64.standard_b64encode(f.read()).decode()
+        img_data = f.read()
+    ext = Path(img_path).suffix.lower()
+    mime_map = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+                '.png': 'image/png', '.webp': 'image/webp', '.bmp': 'image/png'}
+    mime = mime_map.get(ext, 'image/jpeg')
+    files = {'file': (Path(img_path).name, img_data, mime)}
+    data = {
+        'apikey': ocr_key,
+        'language': 'bng',
+        'isOverlayRequired': 'false',
+        'filetype': ext.lstrip('.').upper(),
+        'detectOrientation': 'true',
+        'scale': 'true',
+        'OCREngine': '2',
+    }
+    resp = requests.post('https://api.ocr.space/parse/image',
+                         files=files, data=data, timeout=60)
+    resp.raise_for_status()
+    result = resp.json()
+    if result.get('IsErroredOnProcessing'):
+        raise Exception(f"OCR error: {result.get('ErrorMessage')}")
+    parsed = result.get('ParsedResults', [])
+    if not parsed:
+        return ''
+    return parsed[0].get('ParsedText', '')
 
-    prompt = """Extract ALL multiple-choice questions from this exam paper image.
+
+def parse_text_to_questions(raw_text: str, llm_key: str, model: str) -> list:
+    """Step 2: Parse raw OCR text into structured questions using LLM."""
+    if not raw_text.strip():
+        return []
+    prompt = f"""The following is raw OCR text extracted from a Bengali exam paper.
+Extract ALL multiple-choice questions from this text.
 
 RULES:
 1. Extract every question — do not skip any.
 2. Preserve Bengali text 100% exactly as written.
-3. MATHEMATICAL NOTATION — read with extreme care:
-
-   FRACTIONS — Read mixed numbers carefully:
-   - "1 2/3" (one and two-thirds) → write: 1 2/3
-   - "2 4/7" (two and four-sevenths) → write: 2 4/7
-   - "3 3/8" (three and three-eighths) → write: 3 3/8
-   - "5/6" means five-sixths → write: 5/6
-
-   DEGREE SYMBOL — NEVER drop the ° symbol:
-   - ১৮০° → write: ১৮০°, ২৭০° → write: ২৭০°, 360° → write: 360°
-
-   LOGARITHMS — Read the base carefully:
-   - log₂√2 = log BASE 2 of √2 → write: log₂(√2), NOT "log2 * √2"
-   - The subscript after log is the BASE, not a multiplier
-
-   COMBINATIONS/PERMUTATIONS:
-   - ²ⁿCᵣ = ²ⁿCᵣ₊₂ → write with Unicode superscript/subscript exactly
-
-   OTHER: x² → x², H₂O → H₂O, √x → √x, π → π, × → ×, ÷ → ÷
-
-4. If correct answer is marked (ans.A / circled / ticked / bold) — record it.
-5. Options a/b/c/d or ক/খ/গ/ঘ → always output as A/B/C/D.
-6. For diagrams write [Diagram: description] in question text.
-7. CRITICAL: Every option MUST have text. Never return null or empty string.
+3. Options ক/খ/গ/ঘ or a/b/c/d → output as A/B/C/D.
+4. If correct answer is marked → record it, otherwise null.
+5. Every option MUST have text. Never return null or empty string.
+6. subject_hint: math/physics/chemistry/biology/english/bangla/gk/ict
 
 Output ONLY this JSON, no explanation, no markdown:
-{"questions":[{"number":1,"text":"question text","options":{"A":"opt a","B":"opt b","C":"opt c","D":"opt d"},"correct_option":"C","subject_hint":"gk"}]}
-subject_hint: math/physics/chemistry/biology/english/bangla/gk/ict
-correct_option is null if not marked.
-If no questions: {"questions":[]}"""
+{{"questions":[{{"number":1,"text":"question text","options":{{"A":"opt a","B":"opt b","C":"opt c","D":"opt d"}},"correct_option":"C","subject_hint":"gk"}}]}}
+
+If no questions found: {{"questions":[]}}
+
+RAW TEXT:
+{raw_text[:4000]}"""
 
     resp = requests.post(
         'https://openrouter.ai/api/v1/chat/completions',
         headers={
-            'Authorization': f'Bearer {api_key}',
+            'Authorization': f'Bearer {llm_key}',
             'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://jobs.academy',
-            'X-Title': 'Jobs Academy',
         },
         json={
             'model': model,
-            'max_tokens': 4096,
-            'messages': [{'role': 'user', 'content': [
-                {'type': 'image_url', 'image_url': {'url': f'data:{mime};base64,{img_b64}'}},
-                {'type': 'text', 'text': prompt},
-            ]}],
+            'messages': [{'role': 'user', 'content': prompt}],
+            'max_tokens': 4000,
+            'temperature': 0.1,
         },
-        timeout=90,
+        timeout=60,
     )
+    resp.raise_for_status()
+    content = resp.json()['choices'][0]['message']['content'].strip()
+    content = content.replace('```json', '').replace('```', '').strip()
+    data = json.loads(content)
+    return data.get('questions', [])
 
-    if resp.status_code != 200:
-        raise ValueError(f'API {resp.status_code}: {resp.text[:200]}')
 
-    raw = resp.json()['choices'][0]['message']['content'].strip()
-    if '```' in raw:
-        for part in raw.split('```'):
-            part = part.strip().lstrip('json').strip()
-            if part.startswith('{'):
-                raw = part
-                break
+def scan_image(img_path: str, api_key: str, model: str) -> list:
+    """Two-step OCR: OCR.Space for text extraction + LLM for parsing."""
+    import os
+    ocr_key = os.environ.get('OCR_SPACE_API_KEY', 'K87965802988957')
+    llm_key = api_key  # OpenRouter key for LLM parsing
 
-    s, e = raw.find('{'), raw.rfind('}') + 1
-    if s == -1:
-        raise ValueError(f'No JSON in response: {raw[:200]}')
+    # Step 1: Extract text with OCR.Space
+    raw_text = ocr_extract_text(img_path, ocr_key)
 
-    data = json.loads(raw[s:e])
-    questions = []
-    for q in data.get('questions', []):
-        text = (q.get('text') or '').strip()
-        if not text:
-            continue
-        opts = {
-            k.strip().upper(): str(v).strip()
-            for k, v in (q.get('options') or {}).items()
-            if k.strip().upper() in ('A', 'B', 'C', 'D') and v
-        }
-        questions.append({
-            'number':         q.get('number', len(questions) + 1),
-            'text':           text,
-            'options':        opts,
-            'correct_option': (q.get('correct_option') or '').strip().upper() or None,
-            'subject_hint':   q.get('subject_hint', 'gk'),
-        })
+    # Step 2: Parse text into structured questions
+    questions = parse_text_to_questions(raw_text, llm_key, model)
     return questions
 
 
-@transaction.atomic
 def save_questions(questions: list, opts: dict):
     from quiz.models import (
         Question, QuestionOption, Category, Subject,
