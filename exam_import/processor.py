@@ -128,25 +128,48 @@ If no questions found: {{"questions":[]}}
 RAW TEXT:
 {raw_text[:4000]}"""
 
-    resp = requests.post(
-        'https://openrouter.ai/api/v1/chat/completions',
-        headers={
-            'Authorization': f'Bearer {llm_key}',
-            'Content-Type': 'application/json',
-        },
-        json={
-            'model': model,
-            'messages': [{'role': 'user', 'content': prompt}],
-            'max_tokens': 4000,
-            'temperature': 0.1,
-        },
-        timeout=60,
-    )
-    resp.raise_for_status()
-    content = resp.json()['choices'][0]['message']['content'].strip()
-    content = content.replace('```json', '').replace('```', '').strip()
-    data = json.loads(content)
-    return data.get('questions', [])
+    for attempt in range(3):
+        try:
+            resp = requests.post(
+                'https://openrouter.ai/api/v1/chat/completions',
+                headers={
+                    'Authorization': f'Bearer {llm_key}',
+                    'Content-Type': 'application/json',
+                },
+                json={
+                    'model': model,
+                    'messages': [{'role': 'user', 'content': prompt}],
+                    'max_tokens': 4000,
+                    'temperature': 0.1,
+                },
+                timeout=60,
+            )
+            resp.raise_for_status()
+            result = resp.json()
+            if 'choices' not in result:
+                import time; time.sleep(10); continue
+            content = result['choices'][0]['message']['content']
+            if not content or not content.strip():
+                import time; time.sleep(10); continue
+            content = content.strip()
+            # Extract JSON from response
+            if '```json' in content:
+                content = content.split('```json')[1].split('```')[0].strip()
+            elif '```' in content:
+                content = content.split('```')[1].split('```')[0].strip()
+            # Find JSON object
+            start = content.find('{')
+            end = content.rfind('}') + 1
+            if start >= 0 and end > start:
+                content = content[start:end]
+            data = json.loads(content)
+            return data.get('questions', [])
+        except (json.JSONDecodeError, KeyError):
+            import time; time.sleep(10)
+            continue
+        except Exception:
+            raise
+    return []
 
 
 def scan_image(img_path: str, api_key: str, model: str) -> list:
