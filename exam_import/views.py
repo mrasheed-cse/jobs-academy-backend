@@ -73,7 +73,7 @@ class StartImportView(APIView):
         # Sort by original filename so pages are processed in order
         image_paths.sort()
 
-        model = request.data.get('model', 'tencent/hy3:free')
+        model = request.data.get('model', 'nvidia/nemotron-3-ultra-550b-a55b:free')
 
         # Start background thread
         start_background(job.pk, image_paths, api_key, model)
