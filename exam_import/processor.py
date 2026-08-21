@@ -86,7 +86,7 @@ def ocr_extract_text(img_path: str, ocr_key: str) -> str:
     files = {'file': (Path(img_path).name, img_data, mime)}
     data = {
         'apikey': ocr_key,
-        'language': 'bng',
+        'language': 'eng',
         'isOverlayRequired': 'false',
         'filetype': ext.lstrip('.').upper(),
         'detectOrientation': 'true',
