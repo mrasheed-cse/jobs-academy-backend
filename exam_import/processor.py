@@ -93,16 +93,28 @@ def ocr_extract_text(img_path: str, ocr_key: str) -> str:
         'scale': 'true',
         'OCREngine': '2',
     }
-    resp = requests.post('https://api.ocr.space/parse/image',
-                         files=files, data=data, timeout=60)
-    resp.raise_for_status()
-    result = resp.json()
-    if result.get('IsErroredOnProcessing'):
-        raise Exception(f"OCR error: {result.get('ErrorMessage')}")
-    parsed = result.get('ParsedResults', [])
-    if not parsed:
-        return ''
-    return parsed[0].get('ParsedText', '')
+    import time as _time
+    for attempt in range(3):
+        try:
+            resp = requests.post('https://api.ocr.space/parse/image',
+                                 files=files, data=data, timeout=60)
+            if resp.status_code in (502, 503, 429):
+                _time.sleep(15 * (attempt + 1))
+                continue
+            resp.raise_for_status()
+            result = resp.json()
+            if result.get('IsErroredOnProcessing'):
+                raise Exception(f"OCR error: {result.get('ErrorMessage')}")
+            parsed = result.get('ParsedResults', [])
+            if not parsed:
+                return ''
+            return parsed[0].get('ParsedText', '')
+        except requests.exceptions.RequestException as e:
+            if attempt < 2:
+                _time.sleep(15)
+                continue
+            raise
+    return ''
 
 
 def parse_text_to_questions(raw_text: str, llm_key: str, model: str) -> list:
