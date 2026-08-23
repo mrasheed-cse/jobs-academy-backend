@@ -56,6 +56,8 @@ def process_job(job_id: int, image_paths: list[str], api_key: str, model: str):
             'marks':    job.marks_per_q,
             'negative': job.negative_mark,
         }
+        # Sort questions by their number before saving
+        all_questions.sort(key=lambda q: int(q.get('number', 0)) if str(q.get('number', 0)).isdigit() else 0)
         past_exam = save_questions(all_questions, opts)
         job.past_exam = past_exam
         job.status = 'done'
