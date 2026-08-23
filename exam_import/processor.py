@@ -175,32 +175,32 @@ def save_questions(questions: list, opts: dict):
 
     for q_data in questions:
         text = q_data['text']
-        if Question.objects.filter(text=text).exists():
+        if not text or not text.strip():
             continue
-
         subj_name = subject_map.get(q_data.get('subject_hint', 'gk').lower(), opts['subject'])
         subj, _ = Subject.objects.get_or_create(name=subj_name)
         cat,  _ = Category.objects.get_or_create(name=subj_name)
-
-        question = Question.objects.create(
-            text=text, marks=opts['marks'], category=cat,
-            subject=subj, difficulty_level=2, status='approved',
+        # Get or create the question (don't skip existing ones)
+        question, created = Question.objects.get_or_create(
+            text=text,
+            defaults={'marks': opts['marks'], 'category': cat,
+                      'subject': subj, 'difficulty_level': 2, 'status': 'approved'}
         )
-
-        for key in ('A', 'B', 'C', 'D'):
-            opt_text = q_data['options'].get(key, '').strip()
-            if not opt_text:
-                continue
-            QuestionOption.objects.create(
-                question=question, text=opt_text,
-                is_correct=(key == q_data.get('correct_option')),
+        if created:
+            for key in ('A', 'B', 'C', 'D'):
+                opt_text = q_data['options'].get(key, '').strip()
+                if not opt_text:
+                    continue
+                QuestionOption.objects.create(
+                    question=question, text=opt_text,
+                    is_correct=(key == q_data.get('correct_option')),
+                )
+        # Always link to this past exam (avoid duplicate links)
+        if not PastExamQuestion.objects.filter(exam=past_exam, question=question).exists():
+            PastExamQuestion.objects.create(
+                exam=past_exam, question=question,
+                order=q_data['number'], points=float(opts['marks']),
             )
-
-        PastExamQuestion.objects.create(
-            exam=past_exam, question=question,
-            order=q_data['number'], points=float(opts['marks']),
-        )
-
     past_exam.total_questions = PastExamQuestion.objects.filter(exam=past_exam).count()
     past_exam.save(update_fields=['total_questions'])
     return past_exam
