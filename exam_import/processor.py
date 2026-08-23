@@ -85,16 +85,19 @@ def scan_image(img_path: str, api_key: str, model: str) -> list:
 
     prompt = """Extract ALL multiple-choice questions from this exam paper image.
 RULES:
-1. Extract every question — do not skip any.
-2. Preserve Bengali text 100% exactly as written.
-3. Options ক/খ/গ/ঘ or a/b/c/d → always output as A/B/C/D.
-4. If correct answer is marked → record it, otherwise null.
-5. Every option MUST have text. Never return null or empty string.
-6. subject_hint: math/physics/chemistry/biology/english/bangla/gk/ict
+1. Extract EVERY question — do not skip any, including বানান/spelling questions.
+2. Use the EXACT question number printed in the image — do NOT renumber.
+3. Preserve Bengali text 100% exactly as written.
+4. MATHEMATICAL NOTATION: x² → x², H₂O → H₂O, √x → √x, ১৮০° → ১৮০°
+5. Options ক/খ/গ/ঘ or a/b/c/d → always output as A/B/C/D.
+6. If correct answer is marked (circled/ticked/bold) → record it, otherwise null.
+7. Every option MUST have text. Never return null or empty string.
+8. subject_hint: math/physics/chemistry/biology/english/bangla/gk/ict
+9. Ignore explanation text (ব্যাখ্যা) — only extract question and options.
 
 Output ONLY this JSON, no explanation, no markdown:
-{"questions":[{"number":1,"text":"question text","options":{"A":"opt a","B":"opt b","C":"opt c","D":"opt d"},"correct_option":"C","subject_hint":"gk"}]}
-If no questions: {"questions":[]}"""
+{"questions":[{"number":14,"text":"question text","options":{"A":"opt a","B":"opt b","C":"opt c","D":"opt d"},"correct_option":"A","subject_hint":"bangla"}]}
+If no questions found: {"questions":[]}"""
 
     for attempt in range(3):
         try:
