@@ -75,127 +75,65 @@ def process_job(job_id: int, image_paths: list[str], api_key: str, model: str):
             pass
 
 
-def ocr_extract_text(img_path: str, ocr_key: str) -> str:
-    """Step 1: Extract raw text from image using OCR.Space."""
+def scan_image(img_path: str, api_key: str, model: str) -> list:
+    """Send image directly to Gemini via OpenRouter for OCR + question extraction."""
+    ext_map = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+               '.png': 'image/png', '.webp': 'image/webp', '.bmp': 'image/png'}
+    mime = ext_map.get(Path(img_path).suffix.lower(), 'image/jpeg')
     with open(img_path, 'rb') as f:
-        img_data = f.read()
-    ext = Path(img_path).suffix.lower()
-    mime_map = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-                '.png': 'image/png', '.webp': 'image/webp', '.bmp': 'image/png'}
-    mime = mime_map.get(ext, 'image/jpeg')
-    files = {'file': (Path(img_path).name, img_data, mime)}
-    data = {
-        'apikey': ocr_key,
-        'language': 'eng',
-        'isOverlayRequired': 'false',
-        'filetype': ext.lstrip('.').upper(),
-        'detectOrientation': 'true',
-        'scale': 'true',
-        'OCREngine': '2',
-    }
-    import time as _time
-    for attempt in range(3):
-        try:
-            resp = requests.post('https://api.ocr.space/parse/image',
-                                 files=files, data=data, timeout=60)
-            if resp.status_code in (502, 503, 429):
-                _time.sleep(15 * (attempt + 1))
-                continue
-            resp.raise_for_status()
-            result = resp.json()
-            if result.get('IsErroredOnProcessing'):
-                raise Exception(f"OCR error: {result.get('ErrorMessage')}")
-            parsed = result.get('ParsedResults', [])
-            if not parsed:
-                return ''
-            return parsed[0].get('ParsedText', '')
-        except requests.exceptions.RequestException as e:
-            if attempt < 2:
-                _time.sleep(15)
-                continue
-            raise
-    return ''
+        img_b64 = base64.standard_b64encode(f.read()).decode()
 
-
-def parse_text_to_questions(raw_text: str, llm_key: str, model: str) -> list:
-    """Step 2: Parse raw OCR text into structured questions using LLM."""
-    if not raw_text.strip():
-        return []
-    prompt = f"""The following is raw OCR text extracted from a Bengali exam paper.
-Extract ALL multiple-choice questions from this text.
-
+    prompt = """Extract ALL multiple-choice questions from this exam paper image.
 RULES:
 1. Extract every question — do not skip any.
 2. Preserve Bengali text 100% exactly as written.
-3. Options ক/খ/গ/ঘ or a/b/c/d → output as A/B/C/D.
+3. Options ক/খ/গ/ঘ or a/b/c/d → always output as A/B/C/D.
 4. If correct answer is marked → record it, otherwise null.
 5. Every option MUST have text. Never return null or empty string.
 6. subject_hint: math/physics/chemistry/biology/english/bangla/gk/ict
 
 Output ONLY this JSON, no explanation, no markdown:
-{{"questions":[{{"number":1,"text":"question text","options":{{"A":"opt a","B":"opt b","C":"opt c","D":"opt d"}},"correct_option":"C","subject_hint":"gk"}}]}}
-
-If no questions found: {{"questions":[]}}
-
-RAW TEXT:
-{raw_text[:4000]}"""
+{"questions":[{"number":1,"text":"question text","options":{"A":"opt a","B":"opt b","C":"opt c","D":"opt d"},"correct_option":"C","subject_hint":"gk"}]}
+If no questions: {"questions":[]}"""
 
     for attempt in range(3):
         try:
             resp = requests.post(
                 'https://openrouter.ai/api/v1/chat/completions',
                 headers={
-                    'Authorization': f'Bearer {llm_key}',
+                    'Authorization': f'Bearer {api_key}',
                     'Content-Type': 'application/json',
+                    'HTTP-Referer': 'https://jobs.academy',
                 },
                 json={
                     'model': model,
-                    'messages': [{'role': 'user', 'content': prompt}],
-                    'max_tokens': 4000,
-                    'temperature': 0.1,
+                    'messages': [{
+                        'role': 'user',
+                        'content': [
+                            {'type': 'image_url', 'image_url': {'url': f'data:{mime};base64,{img_b64}'}},
+                            {'type': 'text', 'text': prompt},
+                        ],
+                    }],
+                    'max_tokens': 4096,
                 },
-                timeout=60,
+                timeout=120,
             )
+            if resp.status_code == 429:
+                import time; time.sleep(15); continue
             resp.raise_for_status()
-            result = resp.json()
-            if 'choices' not in result:
-                import time; time.sleep(10); continue
-            content = result['choices'][0]['message']['content']
-            if not content or not content.strip():
-                import time; time.sleep(10); continue
-            content = content.strip()
-            # Extract JSON from response
-            if '```json' in content:
-                content = content.split('```json')[1].split('```')[0].strip()
-            elif '```' in content:
-                content = content.split('```')[1].split('```')[0].strip()
-            # Find JSON object
+            content = resp.json()['choices'][0]['message']['content'].strip()
+            content = content.replace('```json', '').replace('```', '').strip()
             start = content.find('{')
             end = content.rfind('}') + 1
             if start >= 0 and end > start:
                 content = content[start:end]
             data = json.loads(content)
             return data.get('questions', [])
-        except (json.JSONDecodeError, KeyError):
-            import time; time.sleep(10)
-            continue
-        except Exception:
+        except Exception as e:
+            if attempt < 2:
+                import time; time.sleep(10); continue
             raise
     return []
-
-
-def scan_image(img_path: str, api_key: str, model: str) -> list:
-    """Two-step OCR: OCR.Space for text extraction + LLM for parsing."""
-    import os
-    ocr_key = os.environ.get('OCR_SPACE_API_KEY', 'K87965802988957')
-    llm_key = api_key  # OpenRouter key for LLM parsing
-
-    # Step 1: Extract text with OCR.Space
-    raw_text = ocr_extract_text(img_path, ocr_key)
-
-    # Step 2: Parse text into structured questions
-    questions = parse_text_to_questions(raw_text, llm_key, model)
-    return questions
 
 
 def save_questions(questions: list, opts: dict):
