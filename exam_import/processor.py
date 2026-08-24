@@ -210,8 +210,11 @@ def save_questions(questions: list, opts: dict):
         # Always link to this past exam (avoid duplicate links)
         if not PastExamQuestion.objects.filter(exam=past_exam, question=question).exists():
             PastExamQuestion.objects.create(
+            PastExamQuestion.objects.create(
                 exam=past_exam, question=question,
-                order=q_data['number'], points=float(opts['marks']),
+                order=q_data.get('number', 0),
+                points=float(opts['marks']),
+                explanation=q_data.get('explanation') or '',
             )
     past_exam.total_questions = PastExamQuestion.objects.filter(exam=past_exam).count()
     past_exam.save(update_fields=['total_questions'])
