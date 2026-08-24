@@ -264,14 +264,15 @@ class ExamQuestionsAdminView(APIView):
             q = peq.question
             opts = q.options.all()  # uses prefetch cache
             questions.append({
-                'peq_id':   peq.pk,
-                'order':    peq.order,
-                'id':       q.pk,
-                'text':     q.text,
-                'image':    request.build_absolute_uri(q.image.url) if q.image else None,
-                'marks':    peq.points,
-                'subject':  q.subject.name if q.subject else '',
-                'status':   q.status,
+                'peq_id':     peq.pk,
+                'order':      peq.order,
+                'id':         q.pk,
+                'text':       q.text,
+                'image':      request.build_absolute_uri(q.image.url) if q.image else None,
+                'marks':      peq.points,
+                'subject':    q.subject.name if q.subject else '',
+                'status':     q.status,
+                'explanation': peq.explanation or '',
                 'options': [{
                     'id':         o.pk,
                     'text':       o.text,
