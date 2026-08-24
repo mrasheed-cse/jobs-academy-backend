@@ -56,8 +56,12 @@ def process_job(job_id: int, image_paths: list[str], api_key: str, model: str):
             'marks':    job.marks_per_q,
             'negative': job.negative_mark,
         }
-        # Sort questions by their number before saving
+        # Sort by extracted question number
         all_questions.sort(key=lambda q: int(q.get('number', 0)) if str(q.get('number', 0)).isdigit() else 0)
+        # Renumber sequentially to fix any gaps/duplicates from extraction
+        for i, q in enumerate(all_questions, 1):
+            if not str(q.get('number', 0)).isdigit() or int(q.get('number', 0)) == 0:
+                q['number'] = i
         past_exam = save_questions(all_questions, opts)
         job.past_exam = past_exam
         job.status = 'done'
@@ -173,7 +177,7 @@ def save_questions(questions: list, opts: dict):
         },
     )
 
-    for q_data in questions:
+    for seq_num, q_data in enumerate(questions, 1):
         text = q_data['text']
         if not text or not text.strip():
             continue
