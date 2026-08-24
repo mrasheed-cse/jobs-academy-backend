@@ -96,13 +96,21 @@ RULES:
 3. Preserve Bengali text 100% exactly as written.
 4. MATHEMATICAL NOTATION: x² → x², H₂O → H₂O, √x → √x, ১৮০° → ১৮০°
 5. Options ক/খ/গ/ঘ or a/b/c/d → always output as A/B/C/D.
-6. If correct answer is marked (circled/ticked/bold) → record it, otherwise null.
-7. Every option MUST have text. Never return null or empty string.
-8. subject_hint: math/physics/chemistry/biology/english/bangla/gk/ict
-9. Ignore explanation text (ব্যাখ্যা) — only extract question and options.
+6. CORRECT ANSWER DETECTION — look carefully for these:
+   a) A separate answer column on the RIGHT SIDE of the page showing "১০ ঘ" or "10 D" format
+   b) Circled or ticked option in the question
+   c) Bold or underlined option
+   d) "Ans:" or "উত্তর:" label next to an option
+   Map the answer: ক=A, খ=B, গ=C, ঘ=D
+7. EXPLANATION — extract the explanation text (ব্যাখ্যা) for each question if present.
+   The explanation usually appears below the options, labeled ব্যাখ্যা or in a box.
+   Extract it exactly as written in Bengali.
+8. Every option MUST have text. Never return null or empty string.
+9. subject_hint: math/physics/chemistry/biology/english/bangla/gk/ict
 
 Output ONLY this JSON, no explanation, no markdown:
-{"questions":[{"number":14,"text":"question text","options":{"A":"opt a","B":"opt b","C":"opt c","D":"opt d"},"correct_option":"A","subject_hint":"bangla"}]}
+{"questions":[{"number":14,"text":"question text","options":{"A":"opt a","B":"opt b","C":"opt c","D":"opt d"},"correct_option":"A","subject_hint":"bangla","explanation":"ব্যাখ্যা টেক্সট এখানে"}]}
+If no explanation exists for a question, use null for explanation field.
 If no questions found: {"questions":[]}"""
 
     for attempt in range(3):
