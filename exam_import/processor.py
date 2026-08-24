@@ -62,6 +62,10 @@ def process_job(job_id: int, image_paths: list[str], api_key: str, model: str):
         for i, q in enumerate(all_questions, 1):
             if not str(q.get('number', 0)).isdigit() or int(q.get('number', 0)) == 0:
                 q['number'] = i
+        # Format explanations with Gemini for proper math notation
+        for q in all_questions:
+            if q.get('explanation'):
+                q['explanation'] = format_explanation(q['explanation'], api_key)
         past_exam = save_questions(all_questions, opts)
         job.past_exam = past_exam
         job.status = 'done'
@@ -151,6 +155,47 @@ If no questions found: {"questions":[]}"""
                 import time; time.sleep(10); continue
             raise
     return []
+
+
+def format_explanation(raw_explanation: str, api_key: str) -> str:
+    """Post-process raw explanation text with Gemini for proper math formatting."""
+    if not raw_explanation or len(raw_explanation.strip()) < 10:
+        return raw_explanation
+
+    prompt = f"""This is a raw Bengali explanation extracted from a scanned exam paper.
+Format it properly with clear mathematical notation.
+
+RULES:
+1. Keep Bengali text exactly as is
+2. Format fractions clearly: ১/২, ৩/৪
+3. Format powers/exponents: ২², ৩³
+4. Format equations on separate lines
+5. Use × for multiplication, ÷ for division
+6. Replace .: with ∴
+7. Make it readable and well-structured
+8. Do NOT add any new information
+
+RAW TEXT:
+{raw_explanation}
+
+Return ONLY the formatted text, nothing else."""
+
+    try:
+        resp = requests.post(
+            'https://openrouter.ai/api/v1/chat/completions',
+            headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
+            json={
+                'model': 'google/gemini-2.5-flash',
+                'messages': [{'role': 'user', 'content': prompt}],
+                'max_tokens': 500,
+                'temperature': 0.1,
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return resp.json()['choices'][0]['message']['content'].strip()
+    except Exception:
+        return raw_explanation  # fallback to raw if formatting fails
 
 
 def save_questions(questions: list, opts: dict):
