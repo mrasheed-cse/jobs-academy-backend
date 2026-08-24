@@ -2665,7 +2665,8 @@ class PastExamViewSet(viewsets.ModelViewSet):
                 'text': q.text or '',
                 'image': q.image.url if q.image else None,
                 'marks': peq.points or 1,
-                'options': [{'id': o.pk, 'text': o.text, 'image': None} for o in opts],
+                'explanation': peq.explanation or '',
+                'options': [{'id': o.pk, 'text': o.text, 'image': None, 'is_correct': o.is_correct} for o in opts],
             })
         data = {
             'id': past_exam.pk,
