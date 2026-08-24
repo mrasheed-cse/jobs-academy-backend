@@ -177,11 +177,12 @@ class PastExamDetailView(APIView):
             opts = q.options.all()  # uses prefetch cache
             show_correct = request.query_params.get('show_answers') == '1'
             questions.append({
-                'id':           q.pk,
-                'order':        peq.order,
-                'text':         q.text,
-                'subject':      q.subject.name if q.subject else '',
-                'marks':        peq.points,
+                'id':          q.pk,
+                'order':       peq.order,
+                'text':        q.text,
+                'subject':     q.subject.name if q.subject else '',
+                'marks':       peq.points,
+                'explanation': peq.explanation or '',
                 'options': [{
                     'id':         o.pk,
                     'text':       o.text,
