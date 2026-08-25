@@ -28,7 +28,8 @@ SECRET_KEY = config('SECRET_KEY', default='wkf6c#&j%k%-jae(!p_*dq&9x*j_cvsa_l4um
 DEBUG = False
 # FRONTEND_URL = 'http://localhost:8000'
 
-# ALLOWED_HOSTS = []
+# ALLOWED_HOSTS = ['127.0.0.1', 'localhost', 'new.jobs.academy', 'jobs.academy', 'www.jobs.academy']
+CSRF_TRUSTED_ORIGINS = ['https://new.jobs.academy', 'https://jobs.academy', 'http://127.0.0.1', 'http://localhost']
 CORS_ALLOW_ALL_ORIGINS = True
 
 
@@ -42,7 +43,7 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'jonaetshanto8@gmail.com'
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
 
-ALLOWED_HOSTS = ['127.0.0.1','localhost', '217.76.63.211', '161.97.141.58', 'jobs.academy', 'www.jobs.academy', '46.225.58.8']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', 'new.jobs.academy', 'jobs.academy', 'www.jobs.academy', '217.76.63.211', '161.97.141.58', '46.225.58.8']
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 # Application definition

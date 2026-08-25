@@ -315,6 +315,11 @@ class QuestionEditView(APIView):
             q.image = None
 
         q.save()
+        # Handle explanation — stored on PastExamQuestion
+        if 'explanation' in request.data:
+            from quiz.models import PastExamQuestion
+            PastExamQuestion.objects.filter(question=q).update(explanation=request.data['explanation'])
+
         return Response({
             'id': q.pk, 'text': q.text, 'status': q.status,
             'image': request.build_absolute_uri(q.image.url) if q.image else None,
