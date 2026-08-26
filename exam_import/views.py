@@ -470,10 +470,15 @@ class InsertQuestionView(APIView):
                               'difficulty_level': 2, 'status': 'approved'}
                 )
             else:
+                # Use unique placeholder for empty text to avoid unique constraint
+                import uuid
                 question = Question.objects.create(
-                    text=text, marks=1, subject=subj, category=cat,
+                    text=f'__empty_{uuid.uuid4().hex[:8]}__',
+                    marks=1, subject=subj, category=cat,
                     difficulty_level=2, status='approved'
                 )
+                question.text = ''
+                question.save(update_fields=['text'])
                 created = True
 
             # Create options
