@@ -315,24 +315,35 @@ class QuestionEditView(APIView):
             q.image = None
 
         q.save()
-        # Handle explanation — stored on PastExamQuestion
-        if 'explanation' in request.data:
+        # Handle explanation and explanation_image — stored on PastExamQuestion
+        if any(k in request.data for k in ['explanation', 'remove_explanation_image']) or 'explanation_image' in request.FILES:
             from quiz.models import PastExamQuestion
-            PastExamQuestion.objects.filter(question=q).update(explanation=request.data['explanation'])
+            update_fields = {}
+            if 'explanation' in request.data:
+                update_fields['explanation'] = request.data['explanation']
+            if 'explanation_image' in request.FILES:
+                peq = PastExamQuestion.objects.filter(question=q).first()
+                if peq:
+                    peq.explanation_image = request.FILES['explanation_image']
+                    if 'explanation' in update_fields:
+                        peq.explanation = update_fields['explanation']
+                    peq.save()
+            elif 'remove_explanation_image' in request.data:
+                update_fields['explanation_image'] = None
+                PastExamQuestion.objects.filter(question=q).update(**update_fields)
+            elif update_fields:
+                PastExamQuestion.objects.filter(question=q).update(**update_fields)
 
-        # Handle explanation — stored on PastExamQuestion
-        if 'explanation' in request.data:
-            from quiz.models import PastExamQuestion
-            PastExamQuestion.objects.filter(question=q).update(explanation=request.data['explanation'])
+                PastExamQuestion.objects.filter(question=q).update(**update_fields)
+            elif update_fields:
+                PastExamQuestion.objects.filter(question=q).update(**update_fields)
 
-        # Handle explanation — stored on PastExamQuestion
-        if 'explanation' in request.data:
-            from quiz.models import PastExamQuestion
-            PastExamQuestion.objects.filter(question=q).update(explanation=request.data['explanation'])
-
+        peq = __import__('quiz.models', fromlist=['PastExamQuestion']).PastExamQuestion.objects.filter(question=q).first()
         return Response({
             'id': q.pk, 'text': q.text, 'status': q.status,
             'image': request.build_absolute_uri(q.image.url) if q.image else None,
+            'explanation': peq.explanation if peq else '',
+            'explanation_image': request.build_absolute_uri(peq.explanation_image.url) if peq and peq.explanation_image else None,
         })
 
     def delete(self, request, question_id):
