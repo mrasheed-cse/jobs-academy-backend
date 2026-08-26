@@ -299,11 +299,15 @@ class QuestionEditView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def patch(self, request, question_id):
-        from quiz.models import Question
-        try:
-            q = Question.objects.get(pk=question_id)
-        except Question.DoesNotExist:
-            return Response({'detail': 'Not found'}, status=404)
+        from quiz.models import Question, PastExamQuestion
+        # Try as Question ID first, then as PastExamQuestion ID
+        q = Question.objects.filter(pk=question_id).first()
+        if not q:
+            peq = PastExamQuestion.objects.filter(pk=question_id).first()
+            if peq:
+                q = peq.question
+            else:
+                return Response({'detail': 'Not found'}, status=404)
 
         if 'text' in request.data:
             q.text = request.data['text']
