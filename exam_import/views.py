@@ -462,11 +462,19 @@ class InsertQuestionView(APIView):
             # Create the question
             subj, _ = Subject.objects.get_or_create(name=subject_name)
             cat, _ = Category.objects.get_or_create(name=subject_name)
-            question, _ = Question.objects.get_or_create(
-                text=text,
-                defaults={'marks': 1, 'subject': subj, 'category': cat,
-                          'difficulty_level': 2, 'status': 'approved'}
-            )
+            # Always create new question (get_or_create fails for empty text)
+            if text:
+                question, created = Question.objects.get_or_create(
+                    text=text,
+                    defaults={'marks': 1, 'subject': subj, 'category': cat,
+                              'difficulty_level': 2, 'status': 'approved'}
+                )
+            else:
+                question = Question.objects.create(
+                    text=text, marks=1, subject=subj, category=cat,
+                    difficulty_level=2, status='approved'
+                )
+                created = True
 
             # Create options
             for key, opt_text in options.items():
