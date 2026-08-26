@@ -183,6 +183,7 @@ class PastExamDetailView(APIView):
                 'subject':     q.subject.name if q.subject else '',
                 'marks':       peq.points,
                 'explanation': peq.explanation or '',
+                'explanation_image': request.build_absolute_uri(peq.explanation_image.url) if peq.explanation_image else None,
                 'options': [{
                     'id':         o.pk,
                     'text':       o.text,
@@ -274,6 +275,7 @@ class ExamQuestionsAdminView(APIView):
                 'subject':    q.subject.name if q.subject else '',
                 'status':     q.status,
                 'explanation': peq.explanation or '',
+                'explanation_image': request.build_absolute_uri(peq.explanation_image.url) if peq.explanation_image else None,
                 'options': [{
                     'id':         o.pk,
                     'text':       o.text,
