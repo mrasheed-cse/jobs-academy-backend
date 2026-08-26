@@ -1,3 +1,4 @@
+from django.db.models import F
 import os
 import uuid
 from pathlib import Path
@@ -421,3 +422,81 @@ class ExamPublishView(APIView):
             'is_published': exam.is_published,
             'message':      'প্রকাশিত হয়েছে' if exam.is_published else 'অপ্রকাশিত হয়েছে',
         })
+
+
+class InsertQuestionView(APIView):
+    """POST /api/exam-import/exams/{exam_id}/insert-question/
+    Insert a new question at a specific position and reorder subsequent questions.
+    """
+    permission_classes = [IsAdminOrTeacher]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def post(self, request, exam_id):
+        from quiz.models import PastExam, PastExamQuestion, Question, QuestionOption, Subject, Category
+        from django.db import transaction
+
+        try:
+            exam = PastExam.objects.get(pk=exam_id)
+        except PastExam.DoesNotExist:
+            return Response({'detail': 'Exam not found'}, status=404)
+
+        insert_after = int(request.data.get('insert_after', 0))  # order number to insert after
+        text = request.data.get('text', '').strip()
+        subject_name = request.data.get('subject', 'General Knowledge')
+        options = {
+            'A': request.data.get('option_a', '').strip(),
+            'B': request.data.get('option_b', '').strip(),
+            'C': request.data.get('option_c', '').strip(),
+            'D': request.data.get('option_d', '').strip(),
+        }
+        correct = request.data.get('correct_option', 'A').upper()
+
+        if not text:
+            return Response({'detail': 'Question text required'}, status=400)
+
+        with transaction.atomic():
+            # Shift all questions after insert_after position up by 1
+            PastExamQuestion.objects.filter(
+                exam=exam, order__gt=insert_after
+            ).update(order=F('order') + 1)
+
+            # Create the question
+            subj, _ = Subject.objects.get_or_create(name=subject_name)
+            cat, _ = Category.objects.get_or_create(name=subject_name)
+            question = Question.objects.create(
+                text=text, marks=1, subject=subj, category=cat,
+                difficulty_level=2, status='approved'
+            )
+
+            # Create options
+            for key, opt_text in options.items():
+                if opt_text:
+                    QuestionOption.objects.create(
+                        question=question, text=opt_text,
+                        is_correct=(key == correct)
+                    )
+
+            # Insert at position insert_after + 1
+            peq = PastExamQuestion.objects.create(
+                exam=exam, question=question,
+                order=insert_after + 1, points=1.0
+            )
+
+            # Update total_questions
+            exam.total_questions = PastExamQuestion.objects.filter(exam=exam).count()
+            exam.save(update_fields=['total_questions'])
+
+        # Return the new question data
+        opts = question.options.all()
+        return Response({
+            'peq_id': peq.pk,
+            'id': question.pk,
+            'order': peq.order,
+            'text': question.text,
+            'subject': subject_name,
+            'marks': 1.0,
+            'status': 'approved',
+            'explanation': '',
+            'explanation_image': None,
+            'options': [{'id': o.pk, 'text': o.text, 'image': None, 'is_correct': o.is_correct} for o in opts],
+        }, status=201)
