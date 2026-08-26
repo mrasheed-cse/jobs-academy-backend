@@ -463,9 +463,10 @@ class InsertQuestionView(APIView):
             # Create the question
             subj, _ = Subject.objects.get_or_create(name=subject_name)
             cat, _ = Category.objects.get_or_create(name=subject_name)
-            question = Question.objects.create(
-                text=text, marks=1, subject=subj, category=cat,
-                difficulty_level=2, status='approved'
+            question, _ = Question.objects.get_or_create(
+                text=text,
+                defaults={'marks': 1, 'subject': subj, 'category': cat,
+                          'difficulty_level': 2, 'status': 'approved'}
             )
 
             # Create options
