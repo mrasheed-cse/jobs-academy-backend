@@ -451,8 +451,7 @@ class InsertQuestionView(APIView):
         }
         correct = request.data.get('correct_option', 'A').upper()
 
-        if not text:
-            return Response({'detail': 'Question text required'}, status=400)
+        # text is optional — allow image-only questions
 
         with transaction.atomic():
             # Shift all questions after insert_after position up by 1
