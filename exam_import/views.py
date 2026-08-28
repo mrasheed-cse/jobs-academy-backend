@@ -509,3 +509,38 @@ class InsertQuestionView(APIView):
             'explanation_image': None,
             'options': [{'id': o.pk, 'text': o.text, 'image': None, 'is_correct': o.is_correct} for o in opts],
         }, status=201)
+
+
+class MissingQuestionsView(APIView):
+    """GET /api/exam-import/exams/{exam_id}/missing-questions/
+    Detects which question numbers are missing from an imported exam.
+    """
+    permission_classes = [IsAdminOrTeacher]
+
+    def get(self, request, exam_id):
+        from quiz.models import PastExam, PastExamQuestion
+
+        try:
+            exam = PastExam.objects.get(pk=exam_id)
+        except PastExam.DoesNotExist:
+            return Response({'detail': 'Exam not found'}, status=404)
+
+        peqs = PastExamQuestion.objects.filter(exam=exam).values_list('order', flat=True)
+        orders = sorted([o for o in peqs if o and o > 0])
+
+        if not orders:
+            return Response({'missing': [], 'total_found': 0, 'expected_total': 0})
+
+        max_order = max(orders)
+        expected = set(range(1, max_order + 1))
+        actual = set(orders)
+        missing = sorted(expected - actual)
+
+        return Response({
+            'exam_id': exam_id,
+            'exam_title': exam.title,
+            'total_found': len(actual),
+            'expected_total': max_order,
+            'missing_count': len(missing),
+            'missing': missing,
+        })

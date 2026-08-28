@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import StartImportView, InsertQuestionView, FixMathNotationView, ImportStatusView, PastExamListAdminView, PastExamDetailView, ExamQuestionsAdminView, QuestionEditView, OptionEditView, ExamPublishView
+from .views import StartImportView, InsertQuestionView, MissingQuestionsView, FixMathNotationView, ImportStatusView, PastExamListAdminView, PastExamDetailView, ExamQuestionsAdminView, QuestionEditView, OptionEditView, ExamPublishView
 
 urlpatterns = [
     path('api/exam-import/start/',              StartImportView.as_view(),       name='exam-import-start'),
@@ -12,4 +12,5 @@ urlpatterns = [
     path('api/exam-import/questions/<int:question_id>/', QuestionEditView.as_view(), name='question-edit'),
     path('api/exam-import/options/<int:option_id>/', OptionEditView.as_view(), name='option-edit'),
     path('api/exam-import/exams/<int:exam_id>/insert-question/', InsertQuestionView.as_view(), name='insert-question'),
+    path('api/exam-import/exams/<int:exam_id>/missing-questions/', MissingQuestionsView.as_view(), name='missing-questions'),
 ]
