@@ -213,9 +213,18 @@ def save_questions(questions: list, opts: dict):
     exam_type, _ = ExamType.objects.get_or_create(name='MCQ')
 
     subject_map = {
-        'math': 'Mathematics', 'physics': 'Physics', 'chemistry': 'Chemistry',
-        'biology': 'Biology', 'english': 'English', 'bangla': 'Bengali',
-        'gk': 'General Knowledge', 'ict': 'ICT',
+        'math':        'গণিত',
+        'physics':     'পদার্থবিজ্ঞান',
+        'chemistry':   'রসায়ন',
+        'biology':     'জীববিজ্ঞান',
+        'english':     'ইংরেজি ভাষা ও সাহিত্য',
+        'bangla':      'বাংলা ভাষা ও সাহিত্য',
+        'gk':          'সাধারণ জ্ঞান',
+        'ict':         'কম্পিউটার ও তথ্যপ্রযুক্তি',
+        'geography':   'ভূগোল',
+        'mathematics': 'গণিত',
+        'bengali':     'বাংলা ভাষা ও সাহিত্য',
+        'general knowledge': 'সাধারণ জ্ঞান',
     }
 
     past_exam, _ = PastExam.objects.get_or_create(
