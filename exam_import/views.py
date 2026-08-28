@@ -316,6 +316,13 @@ class QuestionEditView(APIView):
             q.text = request.data['text']
         if 'status' in request.data:
             q.status = request.data['status']
+        if 'subject' in request.data:
+            from quiz.models import Subject, Category
+            subj_name = request.data['subject']
+            subj, _ = Subject.objects.get_or_create(name=subj_name)
+            cat, _ = Category.objects.get_or_create(name=subj_name)
+            q.subject = subj
+            q.category = cat
         if 'image' in request.FILES:
             q.image = request.FILES['image']
         if 'remove_image' in request.data and request.data['remove_image'] == 'true':
