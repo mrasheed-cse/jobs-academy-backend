@@ -110,10 +110,13 @@ RULES:
    The explanation usually appears below the options, labeled ব্যাখ্যা or in a box.
    Extract it exactly as written in Bengali.
 8. Every option MUST have text. Never return null or empty string.
-9. subject_hint: math/physics/chemistry/biology/english/bangla/gk/ict
-
+9. CATEGORY — identify the exact subject/topic category from the question content.
+   বাংলা ভাষা ও সাহিত্য, ইংরেজি ভাষা ও সাহিত্য, গণিত, সাধারণ জ্ঞান,
+   বাংলাদেশ বিষয়াবলী, আন্তর্জাতিক বিষয়াবলী, বিজ্ঞান ও প্রযুক্তি,
+   কম্পিউটার ও তথ্যপ্রযুক্তি, ভূগোল, পদার্থবিজ্ঞান, রসায়ন, জীববিজ্ঞান
+   If unsure, use the closest matching category.
 Output ONLY this JSON, no explanation, no markdown:
-{"questions":[{"number":14,"text":"question text","options":{"A":"opt a","B":"opt b","C":"opt c","D":"opt d"},"correct_option":"A","subject_hint":"bangla","explanation":"ব্যাখ্যা টেক্সট এখানে"}]}
+{"questions":[{"number":14,"text":"question text","options":{"A":"opt a","B":"opt b","C":"opt c","D":"opt d"},"correct_option":"A","subject_hint":"বাংলা ভাষা ও সাহিত্য","explanation":"ব্যাখ্যা টেক্সট এখানে"}]}
 If no explanation exists for a question, use null for explanation field.
 If no questions found: {"questions":[]}"""
 
@@ -234,7 +237,9 @@ def save_questions(questions: list, opts: dict):
         text = q_data['text']
         if not text or not text.strip():
             continue
-        subj_name = subject_map.get(q_data.get('subject_hint', 'gk').lower(), opts['subject'])
+        raw_hint = q_data.get('subject_hint', '') or ''
+        # Try legacy code first, then use the hint directly as category name
+        subj_name = subject_map.get(raw_hint.lower(), raw_hint) or opts['subject'] or 'সাধারণ জ্ঞান'
         subj, _ = Subject.objects.get_or_create(name=subj_name)
         cat,  _ = Category.objects.get_or_create(name=subj_name)
         # Get or create the question (don't skip existing ones)
