@@ -210,7 +210,7 @@ def save_questions(questions: list, opts: dict):
 
     org,       _ = Organization.objects.get_or_create(name=opts['org'])
     position,  _ = Position.objects.get_or_create(name=opts['position'])
-    exam_type, _ = ExamType.objects.get_or_create(name='MCQ')
+    exam_type, _ = ExamType.objects.get_or_create(name=opts['org'])
 
     subject_map = {
         'math':        'গণিত',
