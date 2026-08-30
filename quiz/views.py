@@ -138,6 +138,19 @@ class ModelExamTypeAPIView(APIView):
         serializer = ExamTypeSerializer(exam_types, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+class ModelOrganizationAPIView(APIView):
+    def get(self, request):
+        organizations = (
+            Organization.objects
+            .filter(
+                exam_organizations__exam__status='published'  # Join through Status model
+            )
+            .annotate(exam_count=Count('exam_organizations', filter=Q(exam_organizations__exam__status='published')))
+            .distinct()
+        )
+        serializer = OrganizationSerializer(organizations, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 class ModelTestExamView(APIView):
     def get(self, request, exam_id=None):
         if exam_id:
@@ -170,9 +183,12 @@ class ModelTestExamView(APIView):
             return Response(data, status=status.HTTP_200_OK)
         else:
             exam_type_id = request.query_params.get("exam_type")
+            organization_id = request.query_params.get("organization_id")
             exams = Exam.objects.filter(exam__status="published")
             if exam_type_id:
                 exams = exams.filter(exam_type__id=exam_type_id)
+            if organization_id:
+                exams = exams.filter(organization_id=organization_id)
             exams = exams.order_by("-created_at")
             serializer = ExamListSerializer(exams, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -3396,9 +3412,9 @@ class ModelTestCreateView(APIView):
             return Response({'error': 'মডেল টেস্টের নাম দিন'}, status=400)
 
         try:
-            exam_type = ExamType.objects.get(id=int(exam_type_id)) if exam_type_id else ExamType.objects.first()
+            exam_type = ExamType.objects.get(id=int(exam_type_id)) if exam_type_id else None
         except (ExamType.DoesNotExist, TypeError, ValueError):
-            exam_type = ExamType.objects.first()
+            exam_type = None
 
         organization = Organization.objects.filter(id=organization_id).first() if organization_id else None
 

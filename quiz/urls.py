@@ -37,6 +37,7 @@ urlpatterns = [
     path('subjects/', SubjectAPIView.as_view(), name='subject-list'),
     path('exams/exam_detail/<uuid:exam_id>/', ExamDetailView.as_view(), name='exam-detail' ),   
     path('model/exam-types/', ModelExamTypeAPIView.as_view(), name='connected_exam_types'),
+    path('model/organizations/', ModelOrganizationAPIView.as_view(), name='connected_model_organizations'),
     path('model-exams/', ModelTestExamView.as_view(), name='exam-list'),
     path('model-exams/<uuid:exam_id>/', ModelTestExamView.as_view(), name='exam-detail'),
     
