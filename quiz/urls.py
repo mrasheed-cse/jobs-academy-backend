@@ -40,6 +40,9 @@ urlpatterns = [
     path('model/organizations/', ModelOrganizationAPIView.as_view(), name='connected_model_organizations'),
     path('model-exams/', ModelTestExamView.as_view(), name='exam-list'),
     path('model-exams/<uuid:exam_id>/', ModelTestExamView.as_view(), name='exam-detail'),
+    path('model-exams/<uuid:exam_id>/best-scores/', ModelExamBestScoresView.as_view(), name='model-exam-best-scores'),
+    path('model-exams/<uuid:exam_id>/update-details/', ModelTestUpdateView.as_view(), name='model-exam-update-details'),
+    path('model-exams/<uuid:exam_id>/regenerate-questions/', ModelTestRegenerateQuestionsView.as_view(), name='model-exam-regenerate-questions'),
     
     
     path('exams/<uuid:exam_id>/start/', ExamViewSet.as_view({'get': 'start_exam'}), name='start-exam'),
@@ -64,6 +67,7 @@ urlpatterns = [
     path('exams/<int:exam_id>/result/', exam_leaderboard_view, name='exam_leaderboard'),
     
     path('questions/<int:pk>/update/', UpdateQuestionView.as_view(), name='update_question'),
+    path('questions/<int:question_id>/usage/', QuestionUsageDetailView.as_view(), name='question-usage-detail'),
     path('options/<int:pk>/update/', UpdateOptionView.as_view(), name='update_option'),
     
     #attempts

@@ -154,16 +154,21 @@ class ModelOrganizationAPIView(APIView):
 class ModelTestExamView(APIView):
     def get(self, request, exam_id=None):
         if exam_id:
-            exam = get_object_or_404(Exam, exam_id=exam_id)
+            exam = get_object_or_404(
+                Exam.objects.select_related('exam_type', 'organization', 'department', 'position', 'subject', 'category', 'created_by'),
+                exam_id=exam_id,
+            )
             serializer = ExamListSerializer(exam)
             data = dict(serializer.data)
             exam_questions = ExamQuestion.objects.filter(exam=exam).select_related("question").prefetch_related("question__options").order_by("order")
             # Build source exam lookup: question_id -> past exam title
             from quiz.models import PastExamQuestion
             peq_map = {}
+            source_past_exam_ids = set()
             questions_data = []
             for peq in PastExamQuestion.objects.filter(question__in=[eq.question for eq in exam_questions]).select_related("exam"):
                 peq_map[peq.question_id] = peq.exam.title
+                source_past_exam_ids.add(peq.exam_id)
 
             for eq in exam_questions:
                 q = eq.question
@@ -180,6 +185,7 @@ class ModelTestExamView(APIView):
                     "points": eq.points,
                 })
             data["questions"] = questions_data
+            data["source_past_exam_ids"] = list(source_past_exam_ids)
             return Response(data, status=status.HTTP_200_OK)
         else:
             exam_type_id = request.query_params.get("exam_type")
@@ -365,7 +371,7 @@ class ExamViewSet(viewsets.ModelViewSet):
         from quiz.models import ExamQuestion
         exam_questions = ExamQuestion.objects.filter(exam=exam).select_related("question").prefetch_related("question__options").order_by("order")
         questions = [eq.question for eq in exam_questions]
-        serializer = QuestionSerializer(questions, many=True)
+        serializer = QuestionExamSerializer(questions, many=True)
         return Response({
             "questions": serializer.data,
             "skipped_questions": []
@@ -3393,7 +3399,7 @@ class PastExamLeaderboardAPIView(APIView):
 
 
 class ModelTestCreateView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsTeacherOrAdmin]
     authentication_classes = [JWTAuthentication]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
@@ -3523,6 +3529,94 @@ class ModelTestCreateView(APIView):
         return Response({'exam_id': str(exam.exam_id), 'title': exam.title, 'total_questions': total_questions, 'message': f'মডেল টেস্ট "{title}" সফলভাবে তৈরি হয়েছে!', 'warnings': errors[:5]}, status=201)
 
 
+class ModelTestUpdateView(APIView):
+    """PATCH /quiz/model-exams/<exam_id>/update-details/
+    Updates a model test's metadata (title, organization, exam type,
+    pass mark, duration, negative mark, total marks) without touching
+    its question set.
+    """
+    permission_classes = [IsTeacherOrAdmin]
+    authentication_classes = [JWTAuthentication]
+
+    def patch(self, request, exam_id):
+        exam = get_object_or_404(Exam, exam_id=exam_id)
+
+        title = request.data.get('title', '').strip()
+        if not title:
+            return Response({'error': 'মডেল টেস্টের নাম দিন'}, status=400)
+        exam.title = title
+
+        exam_type_id = request.data.get('exam_type_id')
+        exam.exam_type = ExamType.objects.filter(id=exam_type_id).first() if exam_type_id else None
+
+        organization_id = request.data.get('organization_id')
+        exam.organization = Organization.objects.filter(id=organization_id).first() if organization_id else None
+
+        try:
+            exam.pass_mark = int(request.data.get('pass_mark', exam.pass_mark))
+            exam.duration = timedelta(minutes=int(request.data.get('duration', int(exam.duration.total_seconds() // 60))))
+            exam.negative_mark = float(request.data.get('negative_mark', exam.negative_mark))
+            exam.total_mark = int(request.data.get('total_marks', exam.total_mark))
+        except (TypeError, ValueError):
+            return Response({'error': 'সংখ্যাগত মান সঠিক নয়'}, status=400)
+
+        exam.save()
+        return Response({'exam_id': str(exam.exam_id), 'title': exam.title, 'message': 'মডেল টেস্টের বিবরণ হালনাগাদ হয়েছে'})
+
+
+class ModelTestRegenerateQuestionsView(APIView):
+    """POST /quiz/model-exams/<exam_id>/regenerate-questions/
+    Re-picks a fresh random set of questions from the given past exams,
+    replacing the exam's current question set entirely. Mirrors the
+    same random-sampling logic used at creation time.
+    """
+    permission_classes = [IsTeacherOrAdmin]
+    authentication_classes = [JWTAuthentication]
+
+    def post(self, request, exam_id):
+        exam = get_object_or_404(Exam, exam_id=exam_id)
+
+        past_exam_ids_raw = request.data.get('past_exam_ids', [])
+        if isinstance(past_exam_ids_raw, str):
+            try:
+                past_exam_ids = json.loads(past_exam_ids_raw)
+            except Exception:
+                past_exam_ids = []
+        else:
+            past_exam_ids = list(past_exam_ids_raw)
+        past_exam_ids = [int(x) for x in past_exam_ids if x]
+        if not past_exam_ids:
+            return Response({'error': 'অন্তত একটি পরীক্ষা নির্বাচন করুন'}, status=400)
+
+        try:
+            total_questions = int(request.data.get('total_questions', exam.total_questions))
+        except (TypeError, ValueError):
+            return Response({'error': 'প্রশ্ন সংখ্যা সঠিক নয়'}, status=400)
+
+        past_exams = PastExam.objects.filter(pk__in=past_exam_ids)
+        peqs = (PastExamQuestion.objects.filter(exam__in=past_exams)
+                .select_related('question').prefetch_related('question__options').distinct())
+
+        available = peqs.count()
+        if available < total_questions:
+            return Response({'error': f'নির্বাচিত পরীক্ষাগুলোতে মাত্র {available}টি প্রশ্ন আছে। {total_questions}টি চাওয়া হয়েছে।'}, status=400)
+
+        selected_peqs = list(peqs.order_by('?')[:total_questions])
+        random.shuffle(selected_peqs)
+
+        with transaction.atomic():
+            ExamQuestion.objects.filter(exam=exam).delete()
+            for i, peq in enumerate(selected_peqs):
+                q = peq.question
+                eq = ExamQuestion.objects.create(exam=exam, question=q, points=1.0, order=i + 1)
+                for opt in q.options.all()[:4]:
+                    ExamQuestionOption.objects.create(exam_question=eq, option=opt)
+            exam.total_questions = total_questions
+            exam.save()
+
+        return Response({'exam_id': str(exam.exam_id), 'total_questions': total_questions, 'message': 'প্রশ্নসমূহ পুনরায় নির্বাচন করা হয়েছে'})
+
+
 class ModelTestPastExamsView(APIView):
     permission_classes = [IsAuthenticated]
     authentication_classes = [JWTAuthentication]
@@ -3539,6 +3633,57 @@ class ModelTestPastExamsView(APIView):
                  'exam_date': str(e.exam_date) if e.exam_date else '',
                  'total_questions': e.total_questions} for e in qs[:100]]
         return Response({'past_exams': data, 'total': len(data)})
+
+
+class QuestionUsageDetailView(APIView):
+    """GET /quiz/questions/<question_id>/usage/
+    On-demand usage history for a single question (which past exams it has
+    appeared in, and which year). Deliberately NOT computed automatically
+    for every question on every exam-fetch - only when an admin asks for
+    this one question specifically.
+    """
+    permission_classes = [IsTeacherOrAdmin]
+    authentication_classes = [JWTAuthentication]
+
+    def get(self, request, question_id):
+        question = get_object_or_404(Question, pk=question_id)
+        usages = question.usages.select_related('past_exam')
+        details = []
+        for usage in usages:
+            past_exam_title = usage.past_exam.title if usage.past_exam else "External Exam"
+            details.append({
+                'past_exam_id': usage.past_exam_id,
+                'past_exam_title': past_exam_title,
+                'year': usage.year,
+            })
+        return Response({
+            'question_id': question.pk,
+            'usage_count': len(details),
+            'usages': details,
+        })
+
+
+class ModelExamBestScoresView(APIView):
+    """GET /quiz/model-exams/<exam_id>/best-scores/
+    Returns the all-time highest score recorded on this specific model
+    test, across all users who have attempted it.
+    """
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def get(self, request, exam_id):
+        exam = get_object_or_404(Exam, exam_id=exam_id)
+
+        exam_best = (ExamAttempt.objects
+                     .filter(exam=exam)
+                     .order_by('-score')
+                     .values('score')
+                     .first())
+
+        return Response({
+            'exam_best_score': exam_best['score'] if exam_best else None,
+            'exam_total_mark': exam.total_mark,
+        })
 
 
 class ModelTestLeaderboardView(APIView):

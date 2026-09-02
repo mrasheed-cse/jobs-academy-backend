@@ -98,6 +98,30 @@ class QuestionSerializer(serializers.ModelSerializer):
 
 
 
+class QuestionExamSerializer(serializers.ModelSerializer):
+    """Lean question serializer for the exam-taking hot path (ExamViewSet.get_questions).
+    Deliberately omits question_usage_details, which requires one extra DB
+    query per question and is only meaningful in low-frequency admin
+    reporting views (QuestionSerializer above still has it for those).
+    """
+    options = QuestionOptionSerializer(many=True, read_only=True)
+    category_name = serializers.SerializerMethodField()
+    created_by = serializers.StringRelatedField(read_only=True)
+    reviewed_by = serializers.StringRelatedField(read_only=True)
+
+    class Meta:
+        model = Question
+        fields = [
+            'id', 'text', 'image', 'marks',
+            'options', 'status', 'remarks', 'category', 'created_by', 'category_name',
+            'difficulty_level', 'time_limit', 'reviewed_by', 'updated_at',
+            'created_at', 'subject',
+        ]
+
+    def get_category_name(self, obj):
+        return obj.category.name if obj.category and obj.category.name else None
+
+
 class ExamAttemptSerializer(serializers.ModelSerializer):
     score = serializers.ReadOnlyField()
     is_passed = serializers.ReadOnlyField()
@@ -252,6 +276,7 @@ class ExamListSerializer(serializers.ModelSerializer):
             'duration',
             'starting_time',
             'last_date',
+            'organization',
             'organization_name',
             'department_name',
             'position_name',
