@@ -3,9 +3,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Django migrations (optional – if you don't want to track migrations)
-**/migrations/
-!*/migrations/__init__.py
 
 # Database
 *.sqlite3

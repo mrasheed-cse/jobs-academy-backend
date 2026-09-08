@@ -160,7 +160,7 @@ class ModelTestExamView(APIView):
             )
             serializer = ExamListSerializer(exam)
             data = dict(serializer.data)
-            exam_questions = ExamQuestion.objects.filter(exam=exam).select_related("question").prefetch_related("question__options").order_by("order")
+            exam_questions = ExamQuestion.objects.filter(exam=exam).select_related("question", "question__group").prefetch_related("question__options").order_by("order")
             # Build source exam lookup: question_id -> past exam title
             from quiz.models import PastExamQuestion
             peq_map = {}
@@ -176,10 +176,16 @@ class ModelTestExamView(APIView):
                     "id": eq.pk,
                     "question": {
                         "id": q.pk,
-                        "text": q.text or "",
+                        # Grouped questions show identically in model-test
+                        # context regardless of which one is the past-exam
+                        # "lead" - the lead's own text is usually just the
+                        # raw numbered instruction, which is meaningless
+                        # out of its original sequential order.
+                        "text": "" if q.group_id else (q.text or ""),
                         "image": q.image.url if q.image else None,
                         "options": [{"id": o.pk, "text": o.text, "image": None, "is_correct": o.is_correct} for o in q.options.all()],
                         "source_exam": peq_map.get(q.pk, ""),
+                        "group_shadow_instruction": q.group.shadow_instruction if q.group_id else None,
                     },
                     "order": eq.order,
                     "points": eq.points,
@@ -3444,7 +3450,11 @@ class ModelTestCreateView(APIView):
             return Response({'error': 'অন্তত একটি পরীক্ষা নির্বাচন করুন'}, status=400)
 
         past_exams = PastExam.objects.filter(pk__in=past_exam_ids)
+        # Exclude questions with no text and no group instruction to fall
+        # back on - these render as a blank stem with only answer options,
+        # which is meaningless once pulled out of their original context.
         peqs = (PastExamQuestion.objects.filter(exam__in=past_exams)
+                .exclude((Q(question__text__isnull=True) | Q(question__text='')) & Q(question__group__isnull=True))
                 .select_related('question').prefetch_related('question__options').distinct())
 
         available = peqs.count()
@@ -3594,7 +3604,11 @@ class ModelTestRegenerateQuestionsView(APIView):
             return Response({'error': 'প্রশ্ন সংখ্যা সঠিক নয়'}, status=400)
 
         past_exams = PastExam.objects.filter(pk__in=past_exam_ids)
+        # Exclude questions with no text and no group instruction to fall
+        # back on - these render as a blank stem with only answer options,
+        # which is meaningless once pulled out of their original context.
         peqs = (PastExamQuestion.objects.filter(exam__in=past_exams)
+                .exclude((Q(question__text__isnull=True) | Q(question__text='')) & Q(question__group__isnull=True))
                 .select_related('question').prefetch_related('question__options').distinct())
 
         available = peqs.count()

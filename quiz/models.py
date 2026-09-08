@@ -331,6 +331,8 @@ class Question(models.Model):
     exams = models.ManyToManyField('Exam', related_name='questions', blank=True)
     text = models.TextField(unique=True, null=True, blank=True)
     image = models.ImageField(upload_to='question_images/', null=True, blank=True)
+    group = models.ForeignKey('QuestionGroup', related_name='questions', on_delete=models.SET_NULL, null=True, blank=True)
+    is_group_lead = models.BooleanField(default=False, help_text="Shows the group's raw_instruction in past-exam view when true.")
 
     # explanation = models.TextField(null=True, blank=True)
     # explanation_image = models.ImageField(upload_to='explanation_images/', null=True, blank=True)
@@ -372,6 +374,33 @@ class Question(models.Model):
 
 
     
+
+class QuestionGroup(models.Model):
+    """Links questions that share a common instruction (e.g. 'Questions 36
+    to 40: Identify the correct spelling'). Two instruction texts are kept
+    because the same group is displayed differently depending on context:
+
+    - raw_instruction: shown exactly as scanned, only on the group's lead
+      question (is_group_lead=True), when viewing the original past exam
+      in its natural sequential order.
+    - shadow_instruction: a rewritten, number-free, singular version shown
+      on EVERY member question when used in a randomly-ordered model test,
+      where members may appear individually, out of order, or without
+      their siblings.
+    """
+    raw_instruction = models.TextField()
+    shadow_instruction = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, related_name='question_groups_created', on_delete=models.SET_NULL, null=True, blank=True)
+    # False for groups auto-detected by the exam-import AI pipeline, until
+    # an admin has checked the shadow_instruction wording. True (default)
+    # for groups created directly by an admin, who already reviewed the
+    # wording by writing it themselves.
+    reviewed = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.raw_instruction[:60]
+
 
 class QuestionOption(models.Model):
     question = models.ForeignKey(Question, related_name='options', on_delete=models.CASCADE)

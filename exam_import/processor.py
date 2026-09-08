@@ -115,8 +115,30 @@ RULES:
    বাংলাদেশ বিষয়াবলী, আন্তর্জাতিক বিষয়াবলী, বিজ্ঞান ও প্রযুক্তি,
    কম্পিউটার ও তথ্যপ্রযুক্তি, ভূগোল, পদার্থবিজ্ঞান, রসায়ন, জীববিজ্ঞান
    If unsure, use the closest matching category.
+10. SHARED INSTRUCTIONS — some questions are grouped under one instruction
+    printed above them (e.g. "Questions 36-40: Identify the correct
+    spelling" followed by 5 items that have little or no text of their
+    own beyond that instruction, such as a single word with 4 spelling
+    variants as options). When you see this pattern:
+    a) Set "group_range" to the printed number range, e.g. "36-40", on
+       EVERY question in that group (including the first one).
+    b) Set "group_raw_instruction" to the instruction text EXACTLY as
+       printed (including the "Questions X-Y:" prefix), identically on
+       EVERY question in the group.
+    c) Set "group_shadow_instruction" to your own rewrite of that same
+       instruction with the number range removed and phrased for a
+       single question shown on its own, out of order (e.g. "For each
+       question, identify..." becomes "Identify..."). Keep it short and
+       natural. Use the SAME shadow_instruction text on every member.
+    d) If a question in the group has no real content of its own beyond
+       the shared instruction (nothing to add beyond the instruction),
+       set "text" to an empty string "" rather than repeating the
+       instruction or leaving the field out.
+    e) For questions that are NOT part of any such group, omit
+       group_range, group_raw_instruction, and group_shadow_instruction
+       entirely (or set them to null) - do not invent groups.
 Output ONLY this JSON, no explanation, no markdown:
-{"questions":[{"number":14,"text":"question text","options":{"A":"opt a","B":"opt b","C":"opt c","D":"opt d"},"correct_option":"A","subject_hint":"বাংলা ভাষা ও সাহিত্য","explanation":"ব্যাখ্যা টেক্সট এখানে"}]}
+{"questions":[{"number":14,"text":"question text","options":{"A":"opt a","B":"opt b","C":"opt c","D":"opt d"},"correct_option":"A","subject_hint":"বাংলা ভাষা ও সাহিত্য","explanation":"ব্যাখ্যা টেক্সট এখানে","group_range":null,"group_raw_instruction":null,"group_shadow_instruction":null}]}
 If no explanation exists for a question, use null for explanation field.
 If no questions found: {"questions":[]}"""
 
@@ -204,7 +226,7 @@ Return ONLY the formatted text, nothing else."""
 def save_questions(questions: list, opts: dict):
     from quiz.models import (
         Question, QuestionOption, Category, Subject,
-        Organization, Position, ExamType,
+        Organization, Position, ExamType, QuestionGroup,
         PastExam, PastExamQuestion,
     )
 
@@ -242,21 +264,65 @@ def save_questions(questions: list, opts: dict):
         },
     )
 
+    # Shared-instruction groups (e.g. "Questions 36-40: identify the correct
+    # spelling") detected by the AI. Cached per import batch so every member
+    # of the same group reuses one QuestionGroup row instead of creating a
+    # duplicate per line item. The first member encountered (questions are
+    # already sorted by number before this function runs) becomes the lead.
+    group_cache = {}
+    group_lead_seen = set()
+
     for seq_num, q_data in enumerate(questions, 1):
-        text = q_data['text']
-        if not text or not text.strip():
+        text = (q_data.get('text') or '').strip()
+        group_range = (q_data.get('group_range') or '').strip()
+        group_raw = (q_data.get('group_raw_instruction') or '').strip()
+        group_shadow = (q_data.get('group_shadow_instruction') or '').strip()
+
+        # Nothing usable at all - no own text AND no group context to fall
+        # back on. Previously this silently dropped ANY blank-text question,
+        # including legitimate dependent members of an instruction group.
+        if not text and not group_range:
             continue
+
         raw_hint = q_data.get('subject_hint', '') or ''
         # Try legacy code first, then use the hint directly as category name
         subj_name = subject_map.get(raw_hint.lower(), raw_hint) or opts['subject'] or 'সাধারণ জ্ঞান'
         subj, _ = Subject.objects.get_or_create(name=subj_name)
         cat,  _ = Category.objects.get_or_create(name=subj_name)
-        # Get or create the question (don't skip existing ones)
-        question, created = Question.objects.get_or_create(
-            text=text,
-            defaults={'marks': opts['marks'], 'category': cat,
-                      'subject': subj, 'difficulty_level': 2, 'status': 'approved'}
-        )
+
+        group_obj = None
+        is_lead = False
+        if group_range and group_raw:
+            if group_range not in group_cache:
+                group_cache[group_range] = QuestionGroup.objects.create(
+                    raw_instruction=group_raw,
+                    shadow_instruction=group_shadow or group_raw,
+                    reviewed=False,
+                )
+            group_obj = group_cache[group_range]
+            is_lead = group_range not in group_lead_seen
+            group_lead_seen.add(group_range)
+
+        if text:
+            # Get or create the question (don't skip existing ones)
+            question, created = Question.objects.get_or_create(
+                text=text,
+                defaults={'marks': opts['marks'], 'category': cat,
+                          'subject': subj, 'difficulty_level': 2, 'status': 'approved',
+                          'group': group_obj, 'is_group_lead': is_lead}
+            )
+        else:
+            # Dependent group member with no content of its own (e.g. a
+            # spelling-list item that's just answer options). text must be
+            # NULL, not '', since Question.text is unique and multiple
+            # rows can't share an empty string - NULL values don't collide.
+            question = Question.objects.create(
+                text=None, marks=opts['marks'], category=cat, subject=subj,
+                difficulty_level=2, status='approved',
+                group=group_obj, is_group_lead=is_lead,
+            )
+            created = True
+
         if created:
             for key in ('A', 'B', 'C', 'D'):
                 opt_text = q_data['options'].get(key, '').strip()
