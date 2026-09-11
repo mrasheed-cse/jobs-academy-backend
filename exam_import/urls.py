@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import StartImportView, InsertQuestionView, MissingQuestionsView, FixMathNotationView, ImportStatusView, PastExamListAdminView, PastExamDetailView, ExamQuestionsAdminView, QuestionEditView, OptionEditView, ExamPublishView
+from .views import StartImportView, InsertQuestionView, MissingQuestionsView, FixMathNotationView, ImportStatusView, PastExamListAdminView, PastExamDetailView, ExamQuestionsAdminView, QuestionEditView, OptionEditView, ExamPublishView, ReorderQuestionsView
 
 urlpatterns = [
     path('api/exam-import/start/',              StartImportView.as_view(),       name='exam-import-start'),
@@ -9,6 +9,7 @@ urlpatterns = [
     path('api/exam-import/fix-math/', FixMathNotationView.as_view(), name='fix-math'),
     path('api/exam-import/exams/<int:exam_id>/manage/', ExamQuestionsAdminView.as_view(), name='exam-manage-questions'),
     path('api/exam-import/exams/<int:exam_id>/publish/', ExamPublishView.as_view(), name='exam-publish'),
+    path('api/exam-import/exams/<int:exam_id>/reorder-questions/', ReorderQuestionsView.as_view(), name='reorder-questions'),
     path('api/exam-import/questions/<int:question_id>/', QuestionEditView.as_view(), name='question-edit'),
     path('api/exam-import/options/<int:option_id>/', OptionEditView.as_view(), name='option-edit'),
     path('api/exam-import/exams/<int:exam_id>/insert-question/', InsertQuestionView.as_view(), name='insert-question'),

@@ -258,7 +258,7 @@ class ExamQuestionsAdminView(APIView):
 
         peqs = (PastExamQuestion.objects
                 .filter(exam=exam)
-                .select_related('question', 'question__subject')
+                .select_related('question', 'question__subject', 'question__group')
                 .prefetch_related('question__options')
                 .order_by('order', 'pk'))
 
@@ -277,6 +277,7 @@ class ExamQuestionsAdminView(APIView):
                 'status':     q.status,
                 'explanation': peq.explanation or '',
                 'explanation_image': f'https://new.jobs.academy{peq.explanation_image.url}' if peq.explanation_image else None,
+                'group_id':   q.group_id,
                 'options': [{
                     'id':         o.pk,
                     'text':       o.text,
@@ -374,9 +375,21 @@ class QuestionEditView(APIView):
 class OptionEditView(APIView):
     """PATCH /api/exam-import/options/{option_id}/
     Edit an option's text, image, correct status.
+
+    DELETE /api/exam-import/options/{option_id}/
+    Permanently remove an answer option.
     """
     permission_classes = [IsAdminOrTeacher]
     parser_classes = [MultiPartParser, FormParser]
+
+    def delete(self, request, option_id):
+        from quiz.models import QuestionOption
+        try:
+            opt = QuestionOption.objects.get(pk=option_id)
+        except QuestionOption.DoesNotExist:
+            return Response({'detail': 'Not found'}, status=404)
+        opt.delete()
+        return Response(status=204)
 
     def patch(self, request, option_id):
         from quiz.models import QuestionOption
@@ -389,12 +402,10 @@ class OptionEditView(APIView):
             opt.text = request.data['text']
         if 'is_correct' in request.data:
             val = request.data['is_correct']
+            # Toggle this option's own correct status independently -
+            # questions can have multiple correct options (multi-select),
+            # so marking one correct no longer un-marks any others.
             opt.is_correct = val in ('true', '1', True, 'True')
-            # If marking as correct, unmark all others for this question
-            if opt.is_correct:
-                QuestionOption.objects.filter(
-                    question=opt.question
-                ).exclude(pk=opt.pk).update(is_correct=False)
         if 'image' in request.FILES:
             opt.image = request.FILES['image']
         if 'remove_image' in request.data and request.data['remove_image'] == 'true':
@@ -405,6 +416,47 @@ class OptionEditView(APIView):
             'id': opt.pk, 'text': opt.text, 'is_correct': opt.is_correct,
             'image': request.build_absolute_uri(opt.image.url) if opt.image else None,
         })
+
+
+class ReorderQuestionsView(APIView):
+    """POST /api/exam-import/exams/{exam_id}/reorder-questions/
+    Body: {"ordered_peq_ids": [id1, id2, id3, ...]}
+
+    Reassigns PastExamQuestion.order sequentially (1, 2, 3, ...) to match
+    the given sequence. The submitted list must contain exactly the set of
+    PastExamQuestion ids currently belonging to this exam - no missing, no
+    extra, no duplicates - or the request is rejected before anything is
+    changed, to avoid silently corrupting the exam's question sequence.
+    """
+    permission_classes = [IsAdminOrTeacher]
+
+    def post(self, request, exam_id):
+        from quiz.models import PastExam, PastExamQuestion
+        from django.db import transaction
+
+        try:
+            exam = PastExam.objects.get(pk=exam_id)
+        except PastExam.DoesNotExist:
+            return Response({'detail': 'Exam not found'}, status=404)
+
+        ordered_ids = request.data.get('ordered_peq_ids')
+        if not isinstance(ordered_ids, list) or not ordered_ids:
+            return Response({'detail': 'ordered_peq_ids must be a non-empty list'}, status=400)
+
+        existing_ids = set(PastExamQuestion.objects.filter(exam=exam).values_list('id', flat=True))
+        given_ids = set(ordered_ids)
+        if given_ids != existing_ids or len(ordered_ids) != len(given_ids):
+            return Response({
+                'detail': 'ordered_peq_ids must include exactly all questions currently in this exam, with no duplicates',
+                'missing': list(existing_ids - given_ids),
+                'unexpected': list(given_ids - existing_ids),
+            }, status=400)
+
+        with transaction.atomic():
+            for index, peq_id in enumerate(ordered_ids, start=1):
+                PastExamQuestion.objects.filter(pk=peq_id, exam=exam).update(order=index)
+
+        return Response({'detail': 'Order updated', 'total': len(ordered_ids)})
 
 
 class ExamPublishView(APIView):
